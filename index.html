@@ -734,38 +734,54 @@ async function doAutoArrange() {
   // Fetch latest records
   await fetchAllRecords(true);
 
+  // First pass: determine all assignments locally
   const results = [];
+  const toSave = []; // records to batch-save to Google Sheets
   for (const task of tasks) {
     const candidates = recommendSubstitutes(dateStr, dow, task.period, task.teacherName);
     if (candidates.length > 0) {
       const best = candidates[0];
-      // Save to Google Sheets
-      try {
-        const resp = await gsApi({
-          action: 'add_record',
-          date: dateStr,
-          absent_teacher: task.teacherName,
-          substitute_teacher: best.full_code,
-          period: task.period,
-          original_class: task.class_info,
-          original_subject: task.subject
-        });
-        // Add to local cache
-        cachedRecords.push({
-          id: resp.id,
-          date: dateStr,
-          absent_teacher: task.teacherName,
-          substitute_teacher: best.full_code,
-          period: task.period,
-          original_class: task.class_info,
-          original_subject: task.subject
-        });
-        results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning });
-      } catch (e) {
-        results.push({ ...task, success: false, error: e.message });
-      }
+      // Add to local cache immediately so next recommendation reflects it
+      const tempRecord = {
+        id: 'temp_' + task.teacherId + '_' + task.period,
+        date: dateStr,
+        absent_teacher: task.teacherName,
+        substitute_teacher: best.full_code,
+        period: String(task.period),
+        original_class: task.class_info,
+        original_subject: task.subject
+      };
+      cachedRecords.push(tempRecord);
+      toSave.push(tempRecord);
+      results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning });
     } else {
       results.push({ ...task, success: false, error: '没有可用的代课老师' });
+    }
+  }
+
+  // Second pass: batch save all to Google Sheets in ONE API call
+  if (toSave.length > 0) {
+    try {
+      const resp = await gsApiPost({ action: 'add_records' }, {
+        records: toSave.map(r => ({
+          date: r.date,
+          absent_teacher: r.absent_teacher,
+          substitute_teacher: r.substitute_teacher,
+          period: r.period,
+          original_class: r.original_class,
+          original_subject: r.original_subject
+        }))
+      });
+      // Update temp IDs with real IDs
+      if (resp.ids) {
+        resp.ids.forEach((realId, i) => {
+          const temp = toSave[i];
+          const cached = cachedRecords.find(r => r.id === temp.id);
+          if (cached) cached.id = realId;
+        });
+      }
+    } catch (e) {
+      console.warn('Batch save failed, records saved locally only:', e.message);
     }
   }
 
