@@ -89,6 +89,7 @@ body { background: #f5f6fa; font-size: 14px; }
         <div class="card-header">
           <i class="bi bi-list-check"></i> 今日代课安排总表
           <button class="btn btn-sm btn-outline-secondary float-end no-print" onclick="printDaily()"><i class="bi bi-printer"></i> 打印</button>
+          <button class="btn btn-sm btn-outline-danger float-end me-1 no-print" id="clearTodayBtn" onclick="clearTodayAll()" style="display:none"><i class="bi bi-trash"></i> 一键清空</button>
         </div>
         <div class="card-body p-0">
           <table class="table table-sm mb-0">
@@ -1053,13 +1054,16 @@ async function loadTodaySummary() {
   const tbody = document.getElementById('todaySummary');
   const noRec = document.getElementById('noRecords');
 
+  const clearBtn = document.getElementById('clearTodayBtn');
   if (rows.length === 0) {
     tbody.innerHTML = '';
     noRec.classList.remove('d-none');
+    if (clearBtn) clearBtn.style.display = 'none';
     return;
   }
 
   noRec.classList.add('d-none');
+  if (clearBtn) clearBtn.style.display = '';
   // Sort by period
   rows.sort((a, b) => parseInt(a.period) - parseInt(b.period));
 
@@ -1083,6 +1087,31 @@ async function deleteSub(id) {
   } catch (e) {
     alert('删除失败: ' + e.message);
   }
+}
+
+async function clearTodayAll() {
+  const dateStr = document.getElementById('dateInput').value;
+  const rows = getRecordsForDate(dateStr);
+  if (rows.length === 0) return;
+  if (!confirm(`确定要清空今日全部 ${rows.length} 条代课安排吗？`)) return;
+
+  const btn = document.getElementById('clearTodayBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 清空中...';
+
+  for (const r of rows) {
+    try {
+      await gsApi({ action: 'delete_record', id: r.id });
+      cachedRecords = cachedRecords.filter(c => c.id !== r.id);
+    } catch(e) { console.warn('Delete failed:', r.id, e); }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-trash"></i> 一键清空';
+  loadTodaySummary();
+  // Also reset the recommend panel
+  document.getElementById('recommendSection').classList.add('d-none');
+  document.getElementById('placeholder').classList.remove('d-none');
 }
 
 function resetAll() {
