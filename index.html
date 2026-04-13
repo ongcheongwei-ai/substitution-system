@@ -75,6 +75,34 @@ body { background: #f5f6fa; font-size: 14px; }
             <label class="form-label fw-bold">缺席老师列表 <span id="absentCount" class="badge bg-danger">0</span></label>
             <div id="absentTeachers"></div>
           </div>
+          <!-- Volunteer teachers for today -->
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-star text-warning"></i> 事先通知代课 <small class="text-muted">(老师想进特定班级)</small></label>
+            <div class="row g-1 mb-1">
+              <div class="col">
+                <input type="text" id="volunteerSearch" class="form-control form-control-sm" placeholder="老师名字..." autocomplete="off">
+                <div id="volunteerSearchDropdown" class="search-dropdown d-none"></div>
+              </div>
+              <div class="col">
+                <input type="text" id="volunteerClass" class="form-control form-control-sm" placeholder="目标班级 (如 J316)">
+              </div>
+              <div class="col-auto">
+                <button class="btn btn-sm btn-outline-warning" onclick="addVolunteer()"><i class="bi bi-plus"></i> 添加</button>
+              </div>
+            </div>
+            <div id="volunteerList" class="d-flex flex-wrap gap-1 mt-1"></div>
+          </div>
+
+          <!-- Intern teachers for today -->
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-mortarboard text-info"></i> 今日实习老师 <small class="text-muted">(每人最多代3节)</small></label>
+            <div class="input-group mb-1">
+              <input type="text" id="internName" class="form-control form-control-sm" placeholder="输入实习老师名字">
+              <button class="btn btn-sm btn-outline-info" onclick="addIntern()"><i class="bi bi-plus"></i> 添加</button>
+            </div>
+            <div id="internList" class="d-flex flex-wrap gap-1 mt-1"></div>
+          </div>
+
           <div id="arrangeButtons" class="d-none">
             <button id="autoArrange" class="btn btn-success w-100 mb-2" onclick="doAutoArrange()">
               <i class="bi bi-lightning-fill"></i> 一键自动安排
@@ -464,7 +492,7 @@ function checkMaxConsecutive(busySet, newPeriod) {
   return right - left + 1;
 }
 
-function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName) {
+function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName, classInfo) {
   const assigned = getAssignedPeriodsForDate(date);
   const candidates = [];
 
@@ -505,6 +533,11 @@ function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName) {
     const totalSubs = getTotalSubCount(t.full_code);
     const todaySubs = getTodaySubCount(t.full_code, date);
 
+    // Check if this teacher is a volunteer for this class
+    const isVolunteer = classInfo && volunteerTeachers.some(v =>
+      v.full_code === t.full_code && classInfo.includes(v.targetClass)
+    );
+
     candidates.push({
       teacher_id: t.id,
       full_code: t.full_code,
@@ -514,13 +547,16 @@ function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName) {
       first_period: firstPeriod,
       last_period: lastPeriod,
       consecutive: consecutive,
-      consecutive_warning: consecutiveWarning
+      consecutive_warning: consecutiveWarning,
+      isVolunteer: isVolunteer,
+      isIntern: false
     });
   });
 
-  // Sort
+  // Sort: volunteers for this class first, then normal priority
   const tagOrder = { normal: 0, early: 1, late: 1 };
   candidates.sort((a, b) =>
+    ((b.isVolunteer ? 1 : 0) - (a.isVolunteer ? 1 : 0)) ||
     (tagOrder[a.tag] - tagOrder[b.tag]) ||
     (a.consecutive_warning - b.consecutive_warning) ||
     (a.today_subs - b.today_subs) ||
@@ -529,6 +565,34 @@ function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName) {
   );
 
   return candidates.slice(0, 50);
+}
+
+// Recommend including interns and self-study option
+function recommendAll(date, dayOfWeek, period, absentTeacherName, classInfo) {
+  const regularCandidates = recommendSubstitutes(date, dayOfWeek, period, absentTeacherName, classInfo);
+
+  // Add available intern teachers
+  const internCandidates = [];
+  internTeachers.forEach(intern => {
+    const todayCount = getInternTodayCount(intern.name, date);
+    if (todayCount >= intern.maxPeriods) return; // already at max
+    // Check if already assigned this period
+    const assigned = getAssignedPeriodsForDate(date);
+    if (assigned[intern.name] && assigned[intern.name].has(period)) return;
+    internCandidates.push({
+      full_code: intern.name,
+      total_subs: getTotalSubCount(intern.name),
+      today_subs: todayCount,
+      tag: 'intern',
+      isIntern: true,
+      isVolunteer: false,
+      remaining: intern.maxPeriods - todayCount,
+      consecutive_warning: false,
+      consecutive: 0
+    });
+  });
+
+  return { regular: regularCandidates, interns: internCandidates };
 }
 
 // ============================================================
@@ -551,6 +615,9 @@ function showPage(name) {
 // UI: ARRANGE PAGE
 // ============================================================
 let absentList = []; // [{id, full_code, classes, selectedPeriods}]
+let volunteerTeachers = []; // [{full_code, targetClass}] - teachers who volunteered for specific classes
+let internTeachers = []; // [{name, maxPeriods:3}] - intern teachers for today
+const INTERN_MAX_PERIODS = 3;
 
 function updateDayLabel() {
   const dateStr = document.getElementById('dateInput').value;
@@ -701,6 +768,85 @@ function renderAbsentList() {
   }).join('');
 }
 
+// ---- Volunteer teacher search ----
+let volSearchTimeout;
+document.getElementById('volunteerSearch').addEventListener('input', function() {
+  clearTimeout(volSearchTimeout);
+  const q = this.value.trim();
+  const dd = document.getElementById('volunteerSearchDropdown');
+  if (q.length < 1) { dd.classList.add('d-none'); return; }
+  volSearchTimeout = setTimeout(() => {
+    const results = searchTeachers(q).slice(0, 10);
+    if (results.length === 0) { dd.classList.add('d-none'); return; }
+    dd.innerHTML = results.map(t =>
+      `<div class="search-dropdown-item" onclick="selectVolunteerTeacher('${esc(t.full_code)}')">${t.full_code}</div>`
+    ).join('');
+    dd.classList.remove('d-none');
+  }, 100);
+});
+
+function selectVolunteerTeacher(fullCode) {
+  document.getElementById('volunteerSearch').value = fullCode;
+  document.getElementById('volunteerSearchDropdown').classList.add('d-none');
+}
+
+function addVolunteer() {
+  const teacherName = document.getElementById('volunteerSearch').value.trim();
+  const targetClass = document.getElementById('volunteerClass').value.trim();
+  if (!teacherName || !targetClass) { alert('请输入老师名字和目标班级'); return; }
+  // Verify teacher exists
+  const found = teachers.find(t => t.full_code === teacherName);
+  if (!found) { alert('找不到该老师，请从下拉列表中选择'); return; }
+  // Check duplicate
+  if (volunteerTeachers.find(v => v.full_code === teacherName && v.targetClass === targetClass)) { alert('已添加'); return; }
+  volunteerTeachers.push({ full_code: teacherName, targetClass: targetClass });
+  document.getElementById('volunteerSearch').value = '';
+  document.getElementById('volunteerClass').value = '';
+  renderVolunteerList();
+}
+
+function removeVolunteer(idx) {
+  volunteerTeachers.splice(idx, 1);
+  renderVolunteerList();
+}
+
+function renderVolunteerList() {
+  const el = document.getElementById('volunteerList');
+  el.innerHTML = volunteerTeachers.map((v, i) =>
+    `<span class="badge bg-warning text-dark">${v.full_code} → ${v.targetClass}
+      <button class="btn-close btn-close-sm ms-1" style="font-size:0.6em;" onclick="removeVolunteer(${i})"></button>
+    </span>`
+  ).join('');
+}
+
+// ---- Intern teachers ----
+function addIntern() {
+  const name = document.getElementById('internName').value.trim();
+  if (!name) { alert('请输入实习老师名字'); return; }
+  if (internTeachers.find(t => t.name === name)) { alert('已添加'); return; }
+  internTeachers.push({ name: name, maxPeriods: INTERN_MAX_PERIODS });
+  document.getElementById('internName').value = '';
+  renderInternList();
+}
+
+function removeIntern(idx) {
+  internTeachers.splice(idx, 1);
+  renderInternList();
+}
+
+function renderInternList() {
+  const el = document.getElementById('internList');
+  el.innerHTML = internTeachers.map((t, i) =>
+    `<span class="badge bg-info text-dark"><i class="bi bi-mortarboard"></i> ${t.name} (最多${t.maxPeriods}节)
+      <button class="btn-close btn-close-sm ms-1" style="font-size:0.6em;" onclick="removeIntern(${i})"></button>
+    </span>`
+  ).join('');
+}
+
+function getInternTodayCount(internName, date) {
+  return cachedRecords.filter(r => r.substitute_teacher === internName && r.date === date).length;
+}
+
 function collectAllTasks() {
   const tasks = [];
   absentList.forEach(a => {
@@ -739,9 +885,10 @@ async function doAutoArrange() {
   const results = [];
   const toSave = []; // records to batch-save to Google Sheets
   for (const task of tasks) {
-    const candidates = recommendSubstitutes(dateStr, dow, task.period, task.teacherName);
-    if (candidates.length > 0) {
-      const best = candidates[0];
+    const { regular, interns } = recommendAll(dateStr, dow, task.period, task.teacherName, task.class_info);
+    const allCandidates = [...regular, ...interns];
+    if (allCandidates.length > 0) {
+      const best = allCandidates[0];
       // Add to local cache immediately so next recommendation reflects it
       const tempRecord = {
         id: 'temp_' + task.teacherId + '_' + task.period,
@@ -754,9 +901,21 @@ async function doAutoArrange() {
       };
       cachedRecords.push(tempRecord);
       toSave.push(tempRecord);
-      results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning });
+      results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning, isVolunteer: best.isVolunteer, isIntern: best.isIntern });
     } else {
-      results.push({ ...task, success: false, error: '没有可用的代课老师' });
+      // No teacher available - auto-assign self-study
+      const selfStudyRecord = {
+        id: 'temp_self_' + task.teacherId + '_' + task.period,
+        date: dateStr,
+        absent_teacher: task.teacherName,
+        substitute_teacher: '自习课',
+        period: String(task.period),
+        original_class: task.class_info,
+        original_subject: task.subject
+      };
+      cachedRecords.push(selfStudyRecord);
+      toSave.push(selfStudyRecord);
+      results.push({ ...task, success: true, substitute_name: '自习课', total_subs: 0, tag: 'self_study', consecutive: 0, consecutive_warning: false, isSelfStudy: true });
     }
   }
 
@@ -811,6 +970,9 @@ function showAutoResults(results, tasks) {
     const cardId = `auto_${r.teacherId}_${r.period}`;
     if (r.success) {
       let badges = '';
+      if (r.isVolunteer) badges += ' <span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> 自愿</span>';
+      if (r.isIntern) badges += ' <span class="badge bg-info"><i class="bi bi-mortarboard"></i> 实习</span>';
+      if (r.isSelfStudy) badges += ' <span class="badge bg-secondary"><i class="bi bi-book"></i> 自习</span>';
       if (r.tag === 'early') badges += ' <span class="badge bg-info text-dark">需提前上班</span>';
       if (r.tag === 'late') badges += ' <span class="badge bg-info text-dark">需延迟下班</span>';
       if (r.consecutive_warning) badges += ` <span class="badge bg-danger">连续${r.consecutive}节</span>`;
@@ -833,23 +995,6 @@ function showAutoResults(results, tasks) {
           </div>
         </div>
       `;
-    } else {
-      panel.innerHTML += `
-        <div class="card mb-2 border-danger" id="${cardId}">
-          <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
-            <div>
-              <span class="period-badge period-outside me-2">${r.period}</span>
-              <span class="text-muted">${r.class_info}/${r.subject}</span>
-              <span class="text-danger ms-1">(${r.teacherName})</span>
-              <i class="bi bi-arrow-right mx-2"></i>
-              <span class="text-danger"><i class="bi bi-x-circle"></i> 无可用老师</span>
-            </div>
-            <button class="btn btn-sm btn-outline-primary" onclick="manualPickForPeriod('${esc(r.teacherName)}', ${r.period}, '${esc(r.class_info)}', '${esc(r.subject)}', '${cardId}')">
-              <i class="bi bi-hand-index"></i> 手动选择
-            </button>
-          </div>
-        </div>
-      `;
     }
   });
 }
@@ -868,7 +1013,7 @@ async function changeSubstitute(absentTeacherName, period, classInfo, subject, c
     cachedRecords = cachedRecords.filter(r => r.id !== existing.id);
   }
 
-  const candidates = recommendSubstitutes(dateStr, dow, period, absentTeacherName);
+  const { regular, interns } = recommendAll(dateStr, dow, period, absentTeacherName, classInfo);
   card.innerHTML = `
     <div class="card-header py-2">
       <i class="bi bi-clock"></i> 第${period}节 — <span class="text-danger">${absentTeacherName}</span> — ${classInfo} / ${subject}
@@ -877,11 +1022,7 @@ async function changeSubstitute(absentTeacherName, period, classInfo, subject, c
     <div class="card-body p-0"></div>
   `;
   const body = card.querySelector('.card-body');
-  if (candidates.length === 0) {
-    body.innerHTML = '<div class="alert alert-warning m-3">没有可用的代课老师</div>';
-  } else {
-    body.innerHTML = buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject);
-  }
+  body.innerHTML = buildCandidateTable(regular, absentTeacherName, period, classInfo, subject, interns);
   loadTodaySummary();
 }
 
@@ -890,7 +1031,7 @@ function manualPickForPeriod(absentTeacherName, period, classInfo, subject, card
   const dow = getDayOfWeek(dateStr);
   const card = document.getElementById(cardId);
 
-  const candidates = recommendSubstitutes(dateStr, dow, period, absentTeacherName);
+  const { regular, interns } = recommendAll(dateStr, dow, period, absentTeacherName, classInfo);
   card.className = 'card mb-2';
   card.innerHTML = `
     <div class="card-header py-2">
@@ -899,39 +1040,43 @@ function manualPickForPeriod(absentTeacherName, period, classInfo, subject, card
     <div class="card-body p-0"></div>
   `;
   const body = card.querySelector('.card-body');
-  if (candidates.length === 0) {
-    body.innerHTML = '<div class="alert alert-warning m-3">没有可用的代课老师</div>';
-  } else {
-    body.innerHTML = buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject);
-  }
+  body.innerHTML = buildCandidateTable(regular, absentTeacherName, period, classInfo, subject, interns);
 }
 
-function buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject) {
+function buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject, internCandidates) {
   const TAG_LABELS = {
     normal: '',
     early: '<span class="badge bg-info text-dark">需提前上班</span>',
-    late: '<span class="badge bg-info text-dark">需延迟下班</span>'
+    late: '<span class="badge bg-info text-dark">需延迟下班</span>',
+    intern: '<span class="badge bg-info"><i class="bi bi-mortarboard"></i> 实习老师</span>'
   };
 
+  const allCandidates = [...candidates, ...(internCandidates || [])];
   const hasNormal = candidates.some(c => c.tag === 'normal');
-  const hasExtended = candidates.some(c => c.tag !== 'normal');
+  const hasExtended = candidates.some(c => c.tag === 'early' || c.tag === 'late');
+  const hasInterns = internCandidates && internCandidates.length > 0;
 
   let html = '<div class="candidate-scroll"><table class="table table-sm table-hover mb-0"><thead class="sticky-top bg-white"><tr><th>老师</th><th>状态</th><th>累计代课</th><th>今日代课</th><th></th></tr></thead><tbody>';
 
-  let shownDivider = false;
+  let shownExtDivider = false;
+  let shownInternDivider = false;
+
+  // Regular candidates
   candidates.forEach(c => {
-    if (!shownDivider && hasNormal && hasExtended && c.tag !== 'normal') {
-      shownDivider = true;
+    if (!shownExtDivider && hasNormal && hasExtended && (c.tag === 'early' || c.tag === 'late')) {
+      shownExtDivider = true;
       html += `<tr><td colspan="5" class="text-center text-muted small bg-light py-1">
         <i class="bi bi-info-circle"></i> 以下老师需要调整上下班时间
       </td></tr>`;
     }
 
-    let statusHtml = TAG_LABELS[c.tag] || '';
+    let statusHtml = '';
+    if (c.isVolunteer) statusHtml += '<span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> 自愿</span> ';
+    statusHtml += TAG_LABELS[c.tag] || '';
     if (c.consecutive_warning) statusHtml += ` <span class="badge bg-danger">连续${c.consecutive}节</span>`;
 
-    const timeInfo = c.tag !== 'normal' ? `<br><small class="text-muted">原上班: 第${c.first_period}-${c.last_period}节</small>` : '';
-    const rowClass = c.consecutive_warning ? 'table-warning' : (c.tag !== 'normal' ? 'table-light' : '');
+    const timeInfo = (c.tag === 'early' || c.tag === 'late') ? `<br><small class="text-muted">原上班: 第${c.first_period}-${c.last_period}节</small>` : '';
+    const rowClass = c.isVolunteer ? 'table-success' : (c.consecutive_warning ? 'table-warning' : (c.tag !== 'normal' ? 'table-light' : ''));
 
     html += `<tr class="candidate-row ${rowClass}">
       <td>${c.full_code}${timeInfo}</td>
@@ -943,6 +1088,38 @@ function buildCandidateTable(candidates, absentTeacherName, period, classInfo, s
       </button></td>
     </tr>`;
   });
+
+  // Intern candidates
+  if (hasInterns) {
+    html += `<tr><td colspan="5" class="text-center text-muted small bg-light py-1">
+      <i class="bi bi-mortarboard"></i> 实习老师
+    </td></tr>`;
+    internCandidates.forEach(c => {
+      html += `<tr class="candidate-row table-info">
+        <td><i class="bi bi-mortarboard"></i> ${c.full_code}</td>
+        <td><span class="badge bg-info">实习</span> <small>剩余${c.remaining}节</small></td>
+        <td><span class="badge bg-secondary">${c.total_subs}次</span></td>
+        <td><span class="badge ${c.today_subs > 0 ? 'bg-warning text-dark' : 'bg-success'}">${c.today_subs}次</span></td>
+        <td><button class="btn btn-sm btn-info" onclick="assignSubstitute('${esc(absentTeacherName)}', ${period}, '${esc(c.full_code)}', '${esc(classInfo)}', '${esc(subject)}')">
+          <i class="bi bi-check-lg"></i> 选择
+        </button></td>
+      </tr>`;
+    });
+  }
+
+  // Self-study option (always show at the bottom)
+  html += `<tr><td colspan="5" class="text-center small bg-light py-1">
+    <i class="bi bi-book"></i> 其他选项
+  </td></tr>`;
+  html += `<tr class="candidate-row">
+    <td><i class="bi bi-book text-secondary"></i> <strong>自习课</strong></td>
+    <td><span class="badge bg-secondary">无老师监督</span></td>
+    <td>-</td><td>-</td>
+    <td><button class="btn btn-sm btn-outline-secondary" onclick="assignSubstitute('${esc(absentTeacherName)}', ${period}, '自习课', '${esc(classInfo)}', '${esc(subject)}')">
+      <i class="bi bi-check-lg"></i> 选择
+    </button></td>
+  </tr>`;
+
   html += '</tbody></table></div>';
   return html;
 }
@@ -961,14 +1138,9 @@ function doManualArrange() {
 
   tasks.forEach(task => {
     const cardId = `rec_${task.teacherId}_${task.period}`;
-    const candidates = recommendSubstitutes(dateStr, dow, task.period, task.teacherName);
+    const { regular, interns } = recommendAll(dateStr, dow, task.period, task.teacherName, task.class_info);
 
-    let bodyHtml;
-    if (candidates.length === 0) {
-      bodyHtml = '<div class="alert alert-warning m-3">没有可用的代课老师</div>';
-    } else {
-      bodyHtml = buildCandidateTable(candidates, task.teacherName, task.period, task.class_info, task.subject);
-    }
+    let bodyHtml = buildCandidateTable(regular, task.teacherName, task.period, task.class_info, task.subject, interns);
 
     panel.innerHTML += `
       <div class="card mb-3" id="${cardId}">
@@ -1116,7 +1288,11 @@ async function clearTodayAll() {
 
 function resetAll() {
   absentList = [];
+  volunteerTeachers = [];
+  internTeachers = [];
   renderAbsentList();
+  renderVolunteerList();
+  renderInternList();
   document.getElementById('teacherSearch').value = '';
   document.getElementById('recommendSection').classList.add('d-none');
   document.getElementById('placeholder').classList.remove('d-none');
