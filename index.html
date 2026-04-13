@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Áã¨‰∏≠‰ª£ËØæÂÆâÊéíÁ≥ªÁªü</title>
+<title>独中代课安排系统</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -36,18 +36,18 @@ body { background: #f5f6fa; font-size: 14px; }
 
 <div id="loadingOverlay" class="d-none">
   <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;"></div>
-  <div id="loadingText">Âä†ËΩΩ‰∏≠...</div>
+  <div id="loadingText">加载中...</div>
 </div>
 
 <!-- Navbar -->
 <nav class="navbar navbar-dark mb-3 no-print">
   <div class="container-fluid">
-    <span class="navbar-brand"><i class="bi bi-calendar2-check"></i> Áã¨‰∏≠‰ª£ËØæÂÆâÊéíÁ≥ªÁªü</span>
+    <span class="navbar-brand"><i class="bi bi-calendar2-check"></i> 独中代课安排系统</span>
     <div>
-      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('arrange')"><i class="bi bi-pencil-square"></i> ‰ª£ËØæÂÆâÊéí</button>
-      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('records')"><i class="bi bi-journal-text"></i> ËÆ∞ÂΩï</button>
-      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('statistics')"><i class="bi bi-bar-chart"></i> ÁªüËÆ°</button>
-      <button class="btn btn-sm btn-outline-light" onclick="showPage('settings')"><i class="bi bi-gear"></i> ËÆæÁΩÆ</button>
+      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('arrange')"><i class="bi bi-pencil-square"></i> 代课安排</button>
+      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('records')"><i class="bi bi-journal-text"></i> 记录</button>
+      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('statistics')"><i class="bi bi-bar-chart"></i> 统计</button>
+      <button class="btn btn-sm btn-outline-light" onclick="showPage('settings')"><i class="bi bi-gear"></i> 设置</button>
     </div>
   </div>
 </nav>
@@ -59,43 +59,43 @@ body { background: #f5f6fa; font-size: 14px; }
   <div class="row">
     <div class="col-lg-5">
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-pencil-square"></i> ‰ª£ËØæÂÆâÊéí</div>
+        <div class="card-header"><i class="bi bi-pencil-square"></i> 代课安排</div>
         <div class="card-body">
           <div class="mb-3">
-            <label class="form-label fw-bold">Êó•Êúü</label>
+            <label class="form-label fw-bold">日期</label>
             <input type="date" id="dateInput" class="form-control">
             <small class="text-muted" id="dayLabel"></small>
           </div>
           <div class="mb-3 position-relative">
-            <label class="form-label fw-bold">Ê∑ªÂä†Áº∫Â∏≠ËÄÅÂ∏à <small class="text-muted">(ÂèØÊ∑ªÂä†Â§ö‰Ωç)</small></label>
-            <input type="text" id="teacherSearch" class="form-control" placeholder="ËæìÂÖ•ËÄÅÂ∏àÂêçÂ≠óÊêúÁ¥¢..." autocomplete="off">
+            <label class="form-label fw-bold">添加缺席老师 <small class="text-muted">(可添加多位)</small></label>
+            <input type="text" id="teacherSearch" class="form-control" placeholder="输入老师名字搜索..." autocomplete="off">
             <div id="searchDropdown" class="search-dropdown d-none"></div>
           </div>
           <div id="absentTeacherList" class="mb-3 d-none">
-            <label class="form-label fw-bold">Áº∫Â∏≠ËÄÅÂ∏àÂàóË°® <span id="absentCount" class="badge bg-danger">0</span></label>
+            <label class="form-label fw-bold">缺席老师列表 <span id="absentCount" class="badge bg-danger">0</span></label>
             <div id="absentTeachers"></div>
           </div>
           <div id="arrangeButtons" class="d-none">
             <button id="autoArrange" class="btn btn-success w-100 mb-2" onclick="doAutoArrange()">
-              <i class="bi bi-lightning-fill"></i> ‰∏ÄÈîÆËá™Âä®ÂÆâÊéí
+              <i class="bi bi-lightning-fill"></i> 一键自动安排
             </button>
             <button id="startArrange" class="btn btn-outline-primary w-100" onclick="doManualArrange()">
-              <i class="bi bi-hand-index"></i> ÊâãÂä®ÈÄê‰∏™ÂÆâÊéí
+              <i class="bi bi-hand-index"></i> 手动逐个安排
             </button>
           </div>
         </div>
       </div>
       <div class="card">
         <div class="card-header">
-          <i class="bi bi-list-check"></i> ‰ªäÊó•‰ª£ËØæÂÆâÊéíÊÄªË°®
-          <button class="btn btn-sm btn-outline-secondary float-end no-print" onclick="printDaily()"><i class="bi bi-printer"></i> ÊâìÂç∞</button>
+          <i class="bi bi-list-check"></i> 今日代课安排总表
+          <button class="btn btn-sm btn-outline-secondary float-end no-print" onclick="printDaily()"><i class="bi bi-printer"></i> 打印</button>
         </div>
         <div class="card-body p-0">
           <table class="table table-sm mb-0">
-            <thead><tr><th>ËäÇÊ¨°</th><th>ÂéüÁè≠Á∫ß/ÁßëÁõÆ</th><th>Áº∫Â∏≠ËÄÅÂ∏à</th><th>‰ª£ËØæËÄÅÂ∏à</th><th class="no-print"></th></tr></thead>
+            <thead><tr><th>节次</th><th>原班级/科目</th><th>缺席老师</th><th>代课老师</th><th class="no-print"></th></tr></thead>
             <tbody id="todaySummary"></tbody>
           </table>
-          <div id="noRecords" class="text-center text-muted py-3">‰ªäÊó•ÊöÇÊó†‰ª£ËØæÂÆâÊéí</div>
+          <div id="noRecords" class="text-center text-muted py-3">今日暂无代课安排</div>
         </div>
       </div>
     </div>
@@ -105,7 +105,7 @@ body { background: #f5f6fa; font-size: 14px; }
       </div>
       <div id="placeholder" class="text-center text-muted py-5">
         <i class="bi bi-arrow-left-circle" style="font-size: 3rem;"></i>
-        <p class="mt-3">ËØ∑ÂÖàÈÄâÊã©Êó•ÊúüÔºåÊ∑ªÂä†Áº∫Â∏≠ËÄÅÂ∏àÔºåÁÑ∂ÂêéÂºÄÂßãÂÆâÊéí‰ª£ËØæ</p>
+        <p class="mt-3">请先选择日期，添加缺席老师，然后开始安排代课</p>
       </div>
     </div>
   </div>
@@ -114,19 +114,19 @@ body { background: #f5f6fa; font-size: 14px; }
 <!-- ==================== PAGE: RECORDS ==================== -->
 <div id="page-records" class="d-none">
   <div class="card">
-    <div class="card-header"><i class="bi bi-journal-text"></i> ‰ª£ËØæËÆ∞ÂΩï</div>
+    <div class="card-header"><i class="bi bi-journal-text"></i> 代课记录</div>
     <div class="card-body">
       <div class="row g-2 mb-3">
-        <div class="col-auto"><input type="date" id="recDateFrom" class="form-control form-control-sm" placeholder="‰ªé"></div>
-        <div class="col-auto"><input type="date" id="recDateTo" class="form-control form-control-sm" placeholder="Âà∞"></div>
-        <div class="col-auto"><input type="text" id="recTeacher" class="form-control form-control-sm" placeholder="ÊêúÁ¥¢ËÄÅÂ∏à"></div>
-        <div class="col-auto"><button class="btn btn-sm btn-primary" onclick="loadRecords()"><i class="bi bi-search"></i> ÊêúÁ¥¢</button></div>
+        <div class="col-auto"><input type="date" id="recDateFrom" class="form-control form-control-sm" placeholder="从"></div>
+        <div class="col-auto"><input type="date" id="recDateTo" class="form-control form-control-sm" placeholder="到"></div>
+        <div class="col-auto"><input type="text" id="recTeacher" class="form-control form-control-sm" placeholder="搜索老师"></div>
+        <div class="col-auto"><button class="btn btn-sm btn-primary" onclick="loadRecords()"><i class="bi bi-search"></i> 搜索</button></div>
       </div>
       <table class="table table-sm table-striped">
-        <thead><tr><th>Êó•Êúü</th><th>ËäÇÊ¨°</th><th>ÂéüÁè≠Á∫ß</th><th>ÂéüÁßëÁõÆ</th><th>Áº∫Â∏≠ËÄÅÂ∏à</th><th>‰ª£ËØæËÄÅÂ∏à</th><th></th></tr></thead>
+        <thead><tr><th>日期</th><th>节次</th><th>原班级</th><th>原科目</th><th>缺席老师</th><th>代课老师</th><th></th></tr></thead>
         <tbody id="recordsBody"></tbody>
       </table>
-      <div id="noRecordsPage" class="text-center text-muted py-3">ÊöÇÊó†ËÆ∞ÂΩï</div>
+      <div id="noRecordsPage" class="text-center text-muted py-3">暂无记录</div>
     </div>
   </div>
 </div>
@@ -135,37 +135,37 @@ body { background: #f5f6fa; font-size: 14px; }
 <div id="page-statistics" class="d-none">
   <div class="card mb-4">
     <div class="card-header">
-      <i class="bi bi-bar-chart"></i> ‰ª£ËØæÁªüËÆ°
-      <button class="btn btn-sm btn-outline-success float-end" onclick="exportStats()"><i class="bi bi-download"></i> ÂØºÂá∫ Excel</button>
+      <i class="bi bi-bar-chart"></i> 代课统计
+      <button class="btn btn-sm btn-outline-success float-end" onclick="exportStats()"><i class="bi bi-download"></i> 导出 Excel</button>
     </div>
     <div class="card-body">
       <div class="row g-2 mb-3">
         <div class="col-auto">
           <select id="statYear" class="form-select form-select-sm" onchange="loadStats()">
-            <option value="">ÂÖ®ÈÉ®Âπ¥‰ªΩ</option>
+            <option value="">全部年份</option>
           </select>
         </div>
         <div class="col-auto">
           <select id="statMonth" class="form-select form-select-sm" onchange="loadStats()">
-            <option value="">ÂÖ®ÈÉ®Êúà‰ªΩ</option>
-            <option value="1">1Êúà</option><option value="2">2Êúà</option><option value="3">3Êúà</option>
-            <option value="4">4Êúà</option><option value="5">5Êúà</option><option value="6">6Êúà</option>
-            <option value="7">7Êúà</option><option value="8">8Êúà</option><option value="9">9Êúà</option>
-            <option value="10">10Êúà</option><option value="11">11Êúà</option><option value="12">12Êúà</option>
+            <option value="">全部月份</option>
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+            <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+            <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
           </select>
         </div>
       </div>
       <table class="table table-sm table-striped">
-        <thead><tr><th>#</th><th>ËÄÅÂ∏à</th><th>‰ª£ËØæÊ¨°Êï∞</th></tr></thead>
+        <thead><tr><th>#</th><th>老师</th><th>代课次数</th></tr></thead>
         <tbody id="statsBody"></tbody>
       </table>
     </div>
   </div>
   <div class="card">
-    <div class="card-header"><i class="bi bi-person-x"></i> Áº∫Â∏≠ÁªüËÆ°</div>
+    <div class="card-header"><i class="bi bi-person-x"></i> 缺席统计</div>
     <div class="card-body">
       <table class="table table-sm table-striped">
-        <thead><tr><th>#</th><th>ËÄÅÂ∏à</th><th>Ë¢´‰ª£ËØæÊ¨°Êï∞</th></tr></thead>
+        <thead><tr><th>#</th><th>老师</th><th>被代课次数</th></tr></thead>
         <tbody id="absentStatsBody"></tbody>
       </table>
     </div>
@@ -177,19 +177,19 @@ body { background: #f5f6fa; font-size: 14px; }
   <div class="row">
     <div class="col-lg-6">
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-cloud-arrow-up"></i> Google Sheets ËøûÊé•</div>
+        <div class="card-header"><i class="bi bi-cloud-arrow-up"></i> Google Sheets 连接</div>
         <div class="card-body">
           <label class="form-label fw-bold">Google Apps Script Web App URL</label>
           <input type="text" id="apiUrlInput" class="form-control mb-2" placeholder="https://script.google.com/macros/s/.../exec">
-          <button class="btn btn-primary" onclick="saveApiUrl()"><i class="bi bi-check-lg"></i> ‰øùÂ≠òÂπ∂ÊµãËØïËøûÊé•</button>
+          <button class="btn btn-primary" onclick="saveApiUrl()"><i class="bi bi-check-lg"></i> 保存并测试连接</button>
           <div id="apiStatus" class="mt-2"></div>
         </div>
       </div>
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-file-earmark-spreadsheet"></i> ÂØºÂÖ•ËØæË°®</div>
+        <div class="card-header"><i class="bi bi-file-earmark-spreadsheet"></i> 导入课表</div>
         <div class="card-body">
           <input type="file" id="timetableFile" class="form-control mb-2" accept=".xlsx,.xls">
-          <button class="btn btn-primary" onclick="importTimetable()"><i class="bi bi-upload"></i> ÂØºÂÖ•ËØæË°®</button>
+          <button class="btn btn-primary" onclick="importTimetable()"><i class="bi bi-upload"></i> 导入课表</button>
           <div id="importStatus" class="mt-2"></div>
           <div id="timetableInfo" class="mt-2 text-muted small"></div>
         </div>
@@ -197,21 +197,21 @@ body { background: #f5f6fa; font-size: 14px; }
     </div>
     <div class="col-lg-6">
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-clock"></i> ËäÇÊ¨°Êó∂Èó¥</div>
+        <div class="card-header"><i class="bi bi-clock"></i> 节次时间</div>
         <div class="card-body">
           <div id="periodTimesEditor"></div>
-          <button class="btn btn-primary mt-2" onclick="savePeriodTimes()"><i class="bi bi-check-lg"></i> ‰øùÂ≠òÊó∂Èó¥ËÆæÁΩÆ</button>
+          <button class="btn btn-primary mt-2" onclick="savePeriodTimes()"><i class="bi bi-check-lg"></i> 保存时间设置</button>
         </div>
       </div>
       <div class="card">
-        <div class="card-header"><i class="bi bi-database"></i> Êï∞ÊçÆÁÆ°ÁêÜ</div>
+        <div class="card-header"><i class="bi bi-database"></i> 数据管理</div>
         <div class="card-body">
-          <button class="btn btn-outline-warning mb-2" onclick="exportLocalData()"><i class="bi bi-download"></i> ÂØºÂá∫Êú¨Âú∞Êï∞ÊçÆÂ§á‰ªΩ</button>
+          <button class="btn btn-outline-warning mb-2" onclick="exportLocalData()"><i class="bi bi-download"></i> 导出本地数据备份</button>
           <br>
-          <button class="btn btn-outline-info mb-2" onclick="document.getElementById('importBackupFile').click()"><i class="bi bi-upload"></i> ÂØºÂÖ•Êú¨Âú∞Êï∞ÊçÆÂ§á‰ªΩ</button>
+          <button class="btn btn-outline-info mb-2" onclick="document.getElementById('importBackupFile').click()"><i class="bi bi-upload"></i> 导入本地数据备份</button>
           <input type="file" id="importBackupFile" class="d-none" accept=".json" onchange="importLocalData(event)">
           <br>
-          <button class="btn btn-outline-danger" onclick="clearLocalData()"><i class="bi bi-trash"></i> Ê∏ÖÈô§ÊâÄÊúâÊú¨Âú∞Êï∞ÊçÆ</button>
+          <button class="btn btn-outline-danger" onclick="clearLocalData()"><i class="bi bi-trash"></i> 清除所有本地数据</button>
         </div>
       </div>
     </div>
@@ -224,7 +224,7 @@ body { background: #f5f6fa; font-size: 14px; }
 // ============================================================
 // DATA LAYER
 // ============================================================
-const DAY_NAMES = {1:'ÊòüÊúü‰∏Ä',2:'ÊòüÊúü‰∫å',3:'ÊòüÊúü‰∏â',4:'ÊòüÊúüÂõõ',5:'ÊòüÊúü‰∫î',6:'ÊòüÊúüÂÖ≠',0:'ÊòüÊúüÊó•'};
+const DAY_NAMES = {1:'星期一',2:'星期二',3:'星期三',4:'星期四',5:'星期五',6:'星期六',0:'星期日'};
 const MAX_CONSECUTIVE = 4;
 
 const DEFAULT_PERIOD_TIMES = {
@@ -268,7 +268,7 @@ function saveTimetable() { localStorage.setItem(LS_TIMETABLE, JSON.stringify(tim
 // GOOGLE SHEETS API
 // ============================================================
 async function gsApi(params) {
-  if (!apiUrl) throw new Error('ËØ∑ÂÖàÂú®ËÆæÁΩÆÈ°µÈù¢ÈÖçÁΩÆ Google Apps Script URL');
+  if (!apiUrl) throw new Error('请先在设置页面配置 Google Apps Script URL');
   const url = new URL(apiUrl);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.set(k, v); });
   const resp = await fetch(url.toString());
@@ -276,7 +276,7 @@ async function gsApi(params) {
 }
 
 async function gsApiPost(params, body) {
-  if (!apiUrl) throw new Error('ËØ∑ÂÖàÂú®ËÆæÁΩÆÈ°µÈù¢ÈÖçÁΩÆ Google Apps Script URL');
+  if (!apiUrl) throw new Error('请先在设置页面配置 Google Apps Script URL');
   const url = new URL(apiUrl);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.set(k, v); });
   const resp = await fetch(url.toString(), {
@@ -295,7 +295,7 @@ async function fetchAllRecords(force) {
     cachedRecords = data.records || [];
     cachedRecordsLoaded = true;
   } catch (e) {
-    console.warn('Êó†Ê≥ïËøûÊé• Google SheetsÔºå‰ΩøÁî®Êú¨Âú∞ÁºìÂ≠ò', e);
+    console.warn('无法连接 Google Sheets，使用本地缓存', e);
     cachedRecords = [];
   }
   return cachedRecords;
@@ -347,7 +347,7 @@ function importTimetable() {
   const fileInput = document.getElementById('timetableFile');
   const statusEl = document.getElementById('importStatus');
   if (!fileInput.files.length) {
-    statusEl.innerHTML = '<div class="alert alert-warning py-1">ËØ∑ÈÄâÊã©Êñá‰ª∂</div>';
+    statusEl.innerHTML = '<div class="alert alert-warning py-1">请选择文件</div>';
     return;
   }
 
@@ -397,10 +397,10 @@ function importTimetable() {
       saveTeachers();
       saveTimetable();
 
-      statusEl.innerHTML = `<div class="alert alert-success py-1">ÂØºÂÖ•ÊàêÂäüÔºÅ${teachers.length} ‰ΩçËÄÅÂ∏àÔºå${timetable.length} Êù°ËØæÁ®ãËÆ∞ÂΩï</div>`;
+      statusEl.innerHTML = `<div class="alert alert-success py-1">导入成功！${teachers.length} 位老师，${timetable.length} 条课程记录</div>`;
       updateTimetableInfo();
     } catch (err) {
-      statusEl.innerHTML = `<div class="alert alert-danger py-1">ÂØºÂÖ•Â§±Ë¥•: ${err.message}</div>`;
+      statusEl.innerHTML = `<div class="alert alert-danger py-1">导入失败: ${err.message}</div>`;
     }
   };
   reader.readAsArrayBuffer(file);
@@ -410,9 +410,9 @@ function updateTimetableInfo() {
   const el = document.getElementById('timetableInfo');
   if (el) {
     if (teachers.length > 0) {
-      el.textContent = `Â∑≤ÂØºÂÖ•ËØæË°®: ${teachers.length} ‰ΩçËÄÅÂ∏à`;
+      el.textContent = `已导入课表: ${teachers.length} 位老师`;
     } else {
-      el.textContent = 'Â∞öÊú™ÂØºÂÖ•ËØæË°®';
+      el.textContent = '尚未导入课表';
     }
   }
 }
@@ -558,7 +558,7 @@ function updateDayLabel() {
   const label = document.getElementById('dayLabel');
   label.textContent = DAY_NAMES[dow] || '';
   if (dow === 0 || dow === 6) {
-    label.innerHTML = '<span class="text-danger">' + DAY_NAMES[dow] + 'ÔºàÈùûÂ∑•‰ΩúÊó•Ôºâ</span>';
+    label.innerHTML = '<span class="text-danger">' + DAY_NAMES[dow] + '（非工作日）</span>';
   }
 }
 
@@ -609,7 +609,7 @@ function addAbsentTeacher(id) {
 
   const dateStr = document.getElementById('dateInput').value;
   const dow = getDayOfWeek(dateStr);
-  if (dow > 5) { alert('ËØ•Êó•Êúü‰∏çÊòØÂ∑•‰ΩúÊó•'); return; }
+  if (dow > 5) { alert('该日期不是工作日'); return; }
 
   const schedule = getTeacherSchedule(id, dow);
   const classes = [];
@@ -666,21 +666,21 @@ function renderAbsentList() {
   if (totalPeriods > 0) {
     arrangeButtons.classList.remove('d-none');
     document.getElementById('autoArrange').innerHTML =
-      `<i class="bi bi-lightning-fill"></i> ‰∏ÄÈîÆËá™Âä®ÂÆâÊéíÔºà${absentList.length} ‰ΩçËÄÅÂ∏àÔºå${totalPeriods} ËäÇËØæÔºâ`;
+      `<i class="bi bi-lightning-fill"></i> 一键自动安排（${absentList.length} 位老师，${totalPeriods} 节课）`;
   } else {
     arrangeButtons.classList.add('d-none');
   }
 
   container.innerHTML = absentList.map(a => {
     const classesHtml = a.classes.length === 0
-      ? '<div class="text-muted small ms-2">ÂΩìÂ§©Ê≤°ÊúâËØæÁ®ãÂÆâÊéí</div>'
+      ? '<div class="text-muted small ms-2">当天没有课程安排</div>'
       : a.classes.map(c => {
           const checked = a.selectedPeriods.includes(c.period) ? 'checked' : '';
           return `<div class="form-check form-check-inline ms-2">
             <input class="form-check-input" type="checkbox" ${checked}
                    onchange="togglePeriod(${a.id}, ${c.period})" id="cb_${a.id}_${c.period}">
             <label class="form-check-label small" for="cb_${a.id}_${c.period}">
-              Á¨¨${c.period}ËäÇ <span class="text-muted">${c.class_info}/${c.subject}</span>
+              第${c.period}节 <span class="text-muted">${c.class_info}/${c.subject}</span>
             </label>
           </div>`;
         }).join('');
@@ -689,8 +689,8 @@ function renderAbsentList() {
       <div class="d-flex justify-content-between align-items-center">
         <strong><i class="bi bi-person-x text-danger"></i> ${a.full_code}</strong>
         <div>
-          <span class="badge bg-info">${a.selectedPeriods.length}/${a.classes.length} ËäÇ</span>
-          <button class="btn btn-sm btn-outline-danger ms-1" onclick="removeAbsentTeacher(${a.id})" title="ÁßªÈô§">
+          <span class="badge bg-info">${a.selectedPeriods.length}/${a.classes.length} 节</span>
+          <button class="btn btn-sm btn-outline-danger ms-1" onclick="removeAbsentTeacher(${a.id})" title="移除">
             <i class="bi bi-x-lg"></i>
           </button>
         </div>
@@ -723,13 +723,13 @@ function collectAllTasks() {
 // --- Auto arrange ---
 async function doAutoArrange() {
   const tasks = collectAllTasks();
-  if (tasks.length === 0) { alert('ËØ∑Ëá≥Â∞ëÂãæÈÄâ‰∏Ä‰∏™ËäÇÊ¨°'); return; }
+  if (tasks.length === 0) { alert('请至少勾选一个节次'); return; }
 
   const dateStr = document.getElementById('dateInput').value;
   const dow = getDayOfWeek(dateStr);
   const btn = document.getElementById('autoArrange');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ëá™Âä®ÂÆâÊéí‰∏≠...';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 自动安排中...';
 
   // Fetch latest records
   await fetchAllRecords(true);
@@ -765,12 +765,12 @@ async function doAutoArrange() {
         results.push({ ...task, success: false, error: e.message });
       }
     } else {
-      results.push({ ...task, success: false, error: 'Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à' });
+      results.push({ ...task, success: false, error: '没有可用的代课老师' });
     }
   }
 
   btn.disabled = false;
-  btn.innerHTML = '<i class="bi bi-lightning-fill"></i> ‰∏ÄÈîÆËá™Âä®ÂÆâÊéí';
+  btn.innerHTML = '<i class="bi bi-lightning-fill"></i> 一键自动安排';
   showAutoResults(results, tasks);
   loadTodaySummary();
 }
@@ -786,7 +786,7 @@ function showAutoResults(results, tasks) {
   panel.innerHTML += `
     <div class="alert ${failCount === 0 ? 'alert-success' : 'alert-warning'} d-flex align-items-center">
       <i class="bi ${failCount === 0 ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'} me-2" style="font-size:1.3rem;"></i>
-      <div>Ëá™Âä®ÂÆâÊéíÂÆåÊàêÔºö<strong>${successCount}</strong> ËäÇÂ∑≤ÂÆâÊéí${failCount > 0 ? `Ôºå<strong class="text-danger">${failCount}</strong> ËäÇÊú™ËÉΩÂÆâÊéí` : ''}</div>
+      <div>自动安排完成：<strong>${successCount}</strong> 节已安排${failCount > 0 ? `，<strong class="text-danger">${failCount}</strong> 节未能安排` : ''}</div>
     </div>
   `;
 
@@ -794,9 +794,9 @@ function showAutoResults(results, tasks) {
     const cardId = `auto_${r.teacherId}_${r.period}`;
     if (r.success) {
       let badges = '';
-      if (r.tag === 'early') badges += ' <span class="badge bg-info text-dark">ÈúÄÊèêÂâç‰∏äÁè≠</span>';
-      if (r.tag === 'late') badges += ' <span class="badge bg-info text-dark">ÈúÄÂª∂Ëøü‰∏ãÁè≠</span>';
-      if (r.consecutive_warning) badges += ` <span class="badge bg-danger">ËøûÁª≠${r.consecutive}ËäÇ</span>`;
+      if (r.tag === 'early') badges += ' <span class="badge bg-info text-dark">需提前上班</span>';
+      if (r.tag === 'late') badges += ' <span class="badge bg-info text-dark">需延迟下班</span>';
+      if (r.consecutive_warning) badges += ` <span class="badge bg-danger">连续${r.consecutive}节</span>`;
 
       panel.innerHTML += `
         <div class="card mb-2" id="${cardId}">
@@ -807,11 +807,11 @@ function showAutoResults(results, tasks) {
               <span class="text-danger ms-1">(${r.teacherName})</span>
               <i class="bi bi-arrow-right mx-2"></i>
               <strong class="text-success">${r.substitute_name}</strong>
-              <small class="text-muted ms-1">Á¥ØËÆ°${r.total_subs}Ê¨°</small>
+              <small class="text-muted ms-1">累计${r.total_subs}次</small>
               ${badges}
             </div>
             <button class="btn btn-sm btn-outline-secondary" onclick="changeSubstitute('${esc(r.teacherName)}', ${r.period}, '${esc(r.class_info)}', '${esc(r.subject)}', '${cardId}')">
-              <i class="bi bi-arrow-repeat"></i> Êõ¥Êç¢
+              <i class="bi bi-arrow-repeat"></i> 更换
             </button>
           </div>
         </div>
@@ -825,10 +825,10 @@ function showAutoResults(results, tasks) {
               <span class="text-muted">${r.class_info}/${r.subject}</span>
               <span class="text-danger ms-1">(${r.teacherName})</span>
               <i class="bi bi-arrow-right mx-2"></i>
-              <span class="text-danger"><i class="bi bi-x-circle"></i> Êó†ÂèØÁî®ËÄÅÂ∏à</span>
+              <span class="text-danger"><i class="bi bi-x-circle"></i> 无可用老师</span>
             </div>
             <button class="btn btn-sm btn-outline-primary" onclick="manualPickForPeriod('${esc(r.teacherName)}', ${r.period}, '${esc(r.class_info)}', '${esc(r.subject)}', '${cardId}')">
-              <i class="bi bi-hand-index"></i> ÊâãÂä®ÈÄâÊã©
+              <i class="bi bi-hand-index"></i> 手动选择
             </button>
           </div>
         </div>
@@ -854,14 +854,14 @@ async function changeSubstitute(absentTeacherName, period, classInfo, subject, c
   const candidates = recommendSubstitutes(dateStr, dow, period, absentTeacherName);
   card.innerHTML = `
     <div class="card-header py-2">
-      <i class="bi bi-clock"></i> Á¨¨${period}ËäÇ ‚Äî <span class="text-danger">${absentTeacherName}</span> ‚Äî ${classInfo} / ${subject}
-      <span class="badge bg-warning float-end">ÈáçÊñ∞ÈÄâÊã©</span>
+      <i class="bi bi-clock"></i> 第${period}节 — <span class="text-danger">${absentTeacherName}</span> — ${classInfo} / ${subject}
+      <span class="badge bg-warning float-end">重新选择</span>
     </div>
     <div class="card-body p-0"></div>
   `;
   const body = card.querySelector('.card-body');
   if (candidates.length === 0) {
-    body.innerHTML = '<div class="alert alert-warning m-3">Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à</div>';
+    body.innerHTML = '<div class="alert alert-warning m-3">没有可用的代课老师</div>';
   } else {
     body.innerHTML = buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject);
   }
@@ -877,13 +877,13 @@ function manualPickForPeriod(absentTeacherName, period, classInfo, subject, card
   card.className = 'card mb-2';
   card.innerHTML = `
     <div class="card-header py-2">
-      <i class="bi bi-clock"></i> Á¨¨${period}ËäÇ ‚Äî <span class="text-danger">${absentTeacherName}</span> ‚Äî ${classInfo} / ${subject}
+      <i class="bi bi-clock"></i> 第${period}节 — <span class="text-danger">${absentTeacherName}</span> — ${classInfo} / ${subject}
     </div>
     <div class="card-body p-0"></div>
   `;
   const body = card.querySelector('.card-body');
   if (candidates.length === 0) {
-    body.innerHTML = '<div class="alert alert-warning m-3">Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à</div>';
+    body.innerHTML = '<div class="alert alert-warning m-3">没有可用的代课老师</div>';
   } else {
     body.innerHTML = buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject);
   }
@@ -892,37 +892,37 @@ function manualPickForPeriod(absentTeacherName, period, classInfo, subject, card
 function buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject) {
   const TAG_LABELS = {
     normal: '',
-    early: '<span class="badge bg-info text-dark">ÈúÄÊèêÂâç‰∏äÁè≠</span>',
-    late: '<span class="badge bg-info text-dark">ÈúÄÂª∂Ëøü‰∏ãÁè≠</span>'
+    early: '<span class="badge bg-info text-dark">需提前上班</span>',
+    late: '<span class="badge bg-info text-dark">需延迟下班</span>'
   };
 
   const hasNormal = candidates.some(c => c.tag === 'normal');
   const hasExtended = candidates.some(c => c.tag !== 'normal');
 
-  let html = '<div class="candidate-scroll"><table class="table table-sm table-hover mb-0"><thead class="sticky-top bg-white"><tr><th>ËÄÅÂ∏à</th><th>Áä∂ÊÄÅ</th><th>Á¥ØËÆ°‰ª£ËØæ</th><th>‰ªäÊó•‰ª£ËØæ</th><th></th></tr></thead><tbody>';
+  let html = '<div class="candidate-scroll"><table class="table table-sm table-hover mb-0"><thead class="sticky-top bg-white"><tr><th>老师</th><th>状态</th><th>累计代课</th><th>今日代课</th><th></th></tr></thead><tbody>';
 
   let shownDivider = false;
   candidates.forEach(c => {
     if (!shownDivider && hasNormal && hasExtended && c.tag !== 'normal') {
       shownDivider = true;
       html += `<tr><td colspan="5" class="text-center text-muted small bg-light py-1">
-        <i class="bi bi-info-circle"></i> ‰ª•‰∏ãËÄÅÂ∏àÈúÄË¶ÅË∞ÉÊï¥‰∏ä‰∏ãÁè≠Êó∂Èó¥
+        <i class="bi bi-info-circle"></i> 以下老师需要调整上下班时间
       </td></tr>`;
     }
 
     let statusHtml = TAG_LABELS[c.tag] || '';
-    if (c.consecutive_warning) statusHtml += ` <span class="badge bg-danger">ËøûÁª≠${c.consecutive}ËäÇ</span>`;
+    if (c.consecutive_warning) statusHtml += ` <span class="badge bg-danger">连续${c.consecutive}节</span>`;
 
-    const timeInfo = c.tag !== 'normal' ? `<br><small class="text-muted">Âéü‰∏äÁè≠: Á¨¨${c.first_period}-${c.last_period}ËäÇ</small>` : '';
+    const timeInfo = c.tag !== 'normal' ? `<br><small class="text-muted">原上班: 第${c.first_period}-${c.last_period}节</small>` : '';
     const rowClass = c.consecutive_warning ? 'table-warning' : (c.tag !== 'normal' ? 'table-light' : '');
 
     html += `<tr class="candidate-row ${rowClass}">
       <td>${c.full_code}${timeInfo}</td>
       <td>${statusHtml}</td>
-      <td><span class="badge bg-secondary">${c.total_subs}Ê¨°</span></td>
-      <td><span class="badge ${c.today_subs > 0 ? 'bg-warning text-dark' : 'bg-success'}">${c.today_subs}Ê¨°</span></td>
+      <td><span class="badge bg-secondary">${c.total_subs}次</span></td>
+      <td><span class="badge ${c.today_subs > 0 ? 'bg-warning text-dark' : 'bg-success'}">${c.today_subs}次</span></td>
       <td><button class="btn btn-sm btn-primary" onclick="assignSubstitute('${esc(absentTeacherName)}', ${period}, '${esc(c.full_code)}', '${esc(classInfo)}', '${esc(subject)}')">
-        <i class="bi bi-check-lg"></i> ÈÄâÊã©
+        <i class="bi bi-check-lg"></i> 选择
       </button></td>
     </tr>`;
   });
@@ -933,7 +933,7 @@ function buildCandidateTable(candidates, absentTeacherName, period, classInfo, s
 // Manual arrange
 function doManualArrange() {
   const tasks = collectAllTasks();
-  if (tasks.length === 0) { alert('ËØ∑Ëá≥Â∞ëÂãæÈÄâ‰∏Ä‰∏™ËäÇÊ¨°'); return; }
+  if (tasks.length === 0) { alert('请至少勾选一个节次'); return; }
 
   const dateStr = document.getElementById('dateInput').value;
   const dow = getDayOfWeek(dateStr);
@@ -948,7 +948,7 @@ function doManualArrange() {
 
     let bodyHtml;
     if (candidates.length === 0) {
-      bodyHtml = '<div class="alert alert-warning m-3">Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à</div>';
+      bodyHtml = '<div class="alert alert-warning m-3">没有可用的代课老师</div>';
     } else {
       bodyHtml = buildCandidateTable(candidates, task.teacherName, task.period, task.class_info, task.subject);
     }
@@ -956,8 +956,8 @@ function doManualArrange() {
     panel.innerHTML += `
       <div class="card mb-3" id="${cardId}">
         <div class="card-header">
-          <i class="bi bi-clock"></i> Á¨¨${task.period}ËäÇ ‚Äî <span class="text-danger">${task.teacherName}</span> ‚Äî ${task.class_info} / ${task.subject}
-          <span id="status_${task.teacherId}_${task.period}" class="badge bg-warning float-end">ÂæÖÂÆâÊéí</span>
+          <i class="bi bi-clock"></i> 第${task.period}节 — <span class="text-danger">${task.teacherName}</span> — ${task.class_info} / ${task.subject}
+          <span id="status_${task.teacherId}_${task.period}" class="badge bg-warning float-end">待安排</span>
         </div>
         <div class="card-body p-0">${bodyHtml}</div>
       </div>
@@ -1006,7 +1006,7 @@ async function assignSubstitute(absentTeacherName, period, subTeacherName, class
             <strong class="text-success">${subTeacherName}</strong>
           </div>
           <button class="btn btn-sm btn-outline-secondary" onclick="changeSubstitute('${esc(absentTeacherName)}', ${period}, '${esc(classInfo)}', '${esc(subject)}', 'auto_${teacherId}_${period}')">
-            <i class="bi bi-arrow-repeat"></i> Êõ¥Êç¢
+            <i class="bi bi-arrow-repeat"></i> 更换
           </button>
         </div>
       `;
@@ -1018,15 +1018,15 @@ async function assignSubstitute(absentTeacherName, period, subTeacherName, class
       const statusEl = document.getElementById(`status_${teacherId}_${period}`);
       if (statusEl) {
         statusEl.className = 'badge bg-success float-end';
-        statusEl.textContent = 'Â∑≤ÂÆâÊéí: ' + subTeacherName;
+        statusEl.textContent = '已安排: ' + subTeacherName;
       }
       const body = recCard.querySelector('.card-body');
-      body.innerHTML = `<div class="alert alert-success m-3 mb-0"><i class="bi bi-check-circle"></i> Â∑≤ÂÆâÊéí <strong>${subTeacherName}</strong> ‰ª£ËØæ</div>`;
+      body.innerHTML = `<div class="alert alert-success m-3 mb-0"><i class="bi bi-check-circle"></i> 已安排 <strong>${subTeacherName}</strong> 代课</div>`;
     }
 
     loadTodaySummary();
   } catch (e) {
-    alert('‰øùÂ≠òÂ§±Ë¥•: ' + e.message);
+    alert('保存失败: ' + e.message);
   }
 }
 
@@ -1059,13 +1059,13 @@ async function loadTodaySummary() {
 }
 
 async function deleteSub(id) {
-  if (!confirm('Á°ÆÂÆöË¶ÅÊí§ÈîÄËøôÊù°‰ª£ËØæÂÆâÊéíÂêóÔºü')) return;
+  if (!confirm('确定要撤销这条代课安排吗？')) return;
   try {
     await gsApi({ action: 'delete_record', id: id });
     cachedRecords = cachedRecords.filter(r => r.id !== id);
     loadTodaySummary();
   } catch (e) {
-    alert('Âà†Èô§Â§±Ë¥•: ' + e.message);
+    alert('删除失败: ' + e.message);
   }
 }
 
@@ -1125,13 +1125,13 @@ async function loadRecords() {
 }
 
 async function deleteRecordFromPage(id) {
-  if (!confirm('Á°ÆÂÆöË¶ÅÂà†Èô§ËøôÊù°ËÆ∞ÂΩïÂêóÔºü')) return;
+  if (!confirm('确定要删除这条记录吗？')) return;
   try {
     await gsApi({ action: 'delete_record', id: id });
     cachedRecords = cachedRecords.filter(r => r.id !== id);
     loadRecords();
   } catch (e) {
-    alert('Âà†Èô§Â§±Ë¥•: ' + e.message);
+    alert('删除失败: ' + e.message);
   }
 }
 
@@ -1141,9 +1141,9 @@ async function deleteRecordFromPage(id) {
 function initStatYears() {
   const sel = document.getElementById('statYear');
   const currentYear = new Date().getFullYear();
-  sel.innerHTML = '<option value="">ÂÖ®ÈÉ®Âπ¥‰ªΩ</option>';
+  sel.innerHTML = '<option value="">全部年份</option>';
   for (let y = currentYear; y >= currentYear - 5; y--) {
-    sel.innerHTML += `<option value="${y}">${y}Âπ¥</option>`;
+    sel.innerHTML += `<option value="${y}">${y}年</option>`;
   }
 }
 
@@ -1173,9 +1173,9 @@ async function loadStats() {
   const sorted = Object.entries(subCounts).sort((a, b) => b[1] - a[1]);
   const tbody = document.getElementById('statsBody');
   tbody.innerHTML = sorted.map(([name, count], i) =>
-    `<tr><td>${i + 1}</td><td>${name}</td><td><span class="badge bg-primary">${count}Ê¨°</span></td></tr>`
+    `<tr><td>${i + 1}</td><td>${name}</td><td><span class="badge bg-primary">${count}次</span></td></tr>`
   ).join('');
-  if (sorted.length === 0) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">ÊöÇÊó†Êï∞ÊçÆ</td></tr>';
+  if (sorted.length === 0) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">暂无数据</td></tr>';
 
   // Absent counts
   const absentCounts = {};
@@ -1188,9 +1188,9 @@ async function loadStats() {
   const absentSorted = Object.entries(absentCounts).sort((a, b) => b[1] - a[1]);
   const absentBody = document.getElementById('absentStatsBody');
   absentBody.innerHTML = absentSorted.map(([name, count], i) =>
-    `<tr><td>${i + 1}</td><td>${name}</td><td><span class="badge bg-danger">${count}Ê¨°</span></td></tr>`
+    `<tr><td>${i + 1}</td><td>${name}</td><td><span class="badge bg-danger">${count}次</span></td></tr>`
   ).join('');
-  if (absentSorted.length === 0) absentBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">ÊöÇÊó†Êï∞ÊçÆ</td></tr>';
+  if (absentSorted.length === 0) absentBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">暂无数据</td></tr>';
 }
 
 function exportStats() {
@@ -1212,12 +1212,12 @@ function exportStats() {
   });
 
   const sorted = Object.entries(subCounts).sort((a, b) => b[1] - a[1]);
-  const wsData = [['ËÄÅÂ∏à', '‰ª£ËØæÊ¨°Êï∞'], ...sorted];
+  const wsData = [['老师', '代课次数'], ...sorted];
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-  XLSX.utils.book_append_sheet(wb, ws, '‰ª£ËØæÁªüËÆ°');
-  const filename = `‰ª£ËØæÁªüËÆ°${year ? '_' + year : ''}${month ? '_' + month + 'Êúà' : ''}.xlsx`;
+  XLSX.utils.book_append_sheet(wb, ws, '代课统计');
+  const filename = `代课统计${year ? '_' + year : ''}${month ? '_' + month + '月' : ''}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
@@ -1229,25 +1229,25 @@ function saveApiUrl() {
   const statusEl = document.getElementById('apiStatus');
 
   if (!url) {
-    statusEl.innerHTML = '<div class="alert alert-warning py-1">ËØ∑ËæìÂÖ• URL</div>';
+    statusEl.innerHTML = '<div class="alert alert-warning py-1">请输入 URL</div>';
     return;
   }
 
   apiUrl = url;
   localStorage.setItem(LS_API_URL, url);
 
-  statusEl.innerHTML = '<div class="alert alert-info py-1"><span class="spinner-border spinner-border-sm"></span> ÊµãËØïËøûÊé•‰∏≠...</div>';
+  statusEl.innerHTML = '<div class="alert alert-info py-1"><span class="spinner-border spinner-border-sm"></span> 测试连接中...</div>';
 
   gsApi({ action: 'get_records' })
     .then(data => {
       if (data.error) throw new Error(data.error);
       cachedRecords = data.records || [];
       cachedRecordsLoaded = true;
-      statusEl.innerHTML = `<div class="alert alert-success py-1"><i class="bi bi-check-circle"></i> ËøûÊé•ÊàêÂäüÔºÅÂ∑≤ËØªÂèñ ${cachedRecords.length} Êù°ËÆ∞ÂΩï</div>`;
+      statusEl.innerHTML = `<div class="alert alert-success py-1"><i class="bi bi-check-circle"></i> 连接成功！已读取 ${cachedRecords.length} 条记录</div>`;
       loadTodaySummary();
     })
     .catch(e => {
-      statusEl.innerHTML = `<div class="alert alert-danger py-1"><i class="bi bi-x-circle"></i> ËøûÊé•Â§±Ë¥•: ${e.message}</div>`;
+      statusEl.innerHTML = `<div class="alert alert-danger py-1"><i class="bi bi-x-circle"></i> 连接失败: ${e.message}</div>`;
     });
 }
 
@@ -1256,7 +1256,7 @@ function renderPeriodTimesEditor() {
   let html = '';
   for (let p = 1; p <= 10; p++) {
     html += `<div class="row g-2 mb-1">
-      <div class="col-3"><label class="form-label mb-0">Á¨¨${p}ËäÇ</label></div>
+      <div class="col-3"><label class="form-label mb-0">第${p}节</label></div>
       <div class="col-9"><input type="text" class="form-control form-control-sm" id="pt_${p}" value="${periodTimes[p] || ''}"></div>
     </div>`;
   }
@@ -1269,7 +1269,7 @@ function savePeriodTimes() {
     if (val) periodTimes[p] = val;
   }
   localStorage.setItem(LS_PERIOD_TIMES, JSON.stringify(periodTimes));
-  alert('Êó∂Èó¥ËÆæÁΩÆÂ∑≤‰øùÂ≠ò');
+  alert('时间设置已保存');
 }
 
 function exportLocalData() {
@@ -1283,7 +1283,7 @@ function exportLocalData() {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '‰ª£ËØæÁ≥ªÁªüÂ§á‰ªΩ_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = '代课系统备份_' + new Date().toISOString().slice(0, 10) + '.json';
   a.click();
 }
 
@@ -1298,24 +1298,24 @@ function importLocalData(event) {
       if (data.timetable) { timetable = data.timetable; saveTimetable(); }
       if (data.periodTimes) { periodTimes = data.periodTimes; localStorage.setItem(LS_PERIOD_TIMES, JSON.stringify(periodTimes)); }
       if (data.apiUrl) { apiUrl = data.apiUrl; localStorage.setItem(LS_API_URL, apiUrl); }
-      alert('Êï∞ÊçÆÂØºÂÖ•ÊàêÂäüÔºÅ');
+      alert('数据导入成功！');
       location.reload();
     } catch (err) {
-      alert('ÂØºÂÖ•Â§±Ë¥•: ' + err.message);
+      alert('导入失败: ' + err.message);
     }
   };
   reader.readAsText(file);
 }
 
 function clearLocalData() {
-  if (!confirm('Á°ÆÂÆöË¶ÅÊ∏ÖÈô§ÊâÄÊúâÊú¨Âú∞Êï∞ÊçÆÂêóÔºüÔºàËØæË°®ÂíåËÆæÁΩÆÂ∞ÜË¢´Ê∏ÖÈô§ÔºåGoogle Sheets ‰∏äÁöÑËÆ∞ÂΩï‰∏çÂèóÂΩ±ÂìçÔºâ')) return;
+  if (!confirm('确定要清除所有本地数据吗？（课表和设置将被清除，Google Sheets 上的记录不受影响）')) return;
   localStorage.removeItem(LS_TEACHERS);
   localStorage.removeItem(LS_TIMETABLE);
   localStorage.removeItem(LS_PERIOD_TIMES);
   teachers = [];
   timetable = [];
   periodTimes = { ...DEFAULT_PERIOD_TIMES };
-  alert('Êú¨Âú∞Êï∞ÊçÆÂ∑≤Ê∏ÖÈô§');
+  alert('本地数据已清除');
   location.reload();
 }
 
@@ -1334,16 +1334,16 @@ async function init() {
   if (teachers.length === 0 || !apiUrl) {
     showPage('settings');
     if (teachers.length === 0) {
-      document.getElementById('importStatus').innerHTML = '<div class="alert alert-info py-1">ËØ∑ÂÖàÂØºÂÖ•ËØæË°® Excel Êñá‰ª∂ÔºàÁªÑÂêà.xlsxÔºâ</div>';
+      document.getElementById('importStatus').innerHTML = '<div class="alert alert-info py-1">请先导入课表 Excel 文件（组合.xlsx）</div>';
     }
     if (!apiUrl) {
-      document.getElementById('apiStatus').innerHTML = '<div class="alert alert-info py-1">ËØ∑ÈÖçÁΩÆ Google Apps Script URL ‰ª•ÂêØÁî®ËÆ∞ÂΩïÂ≠òÂÇ®</div>';
+      document.getElementById('apiStatus').innerHTML = '<div class="alert alert-info py-1">请配置 Google Apps Script URL 以启用记录存储</div>';
     }
     return;
   }
 
   // Load records from Google Sheets
-  showLoading('Âä†ËΩΩ‰ª£ËØæËÆ∞ÂΩï...');
+  showLoading('加载代课记录...');
   try {
     await fetchAllRecords(true);
   } catch(e) {
@@ -1354,7 +1354,7 @@ async function init() {
 }
 
 function showLoading(text) {
-  document.getElementById('loadingText').textContent = text || 'Âä†ËΩΩ‰∏≠...';
+  document.getElementById('loadingText').textContent = text || '加载中...';
   document.getElementById('loadingOverlay').classList.remove('d-none');
 }
 
