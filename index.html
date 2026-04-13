@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Áã¨‰∏≠‰ª£ËØæÂÆâÊéíÁ≥ªÁªü</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+body { background: #f5f6fa; font-size: 14px; }
+.navbar { background: linear-gradient(135deg, #1a237e 0%, #283593 100%); }
+.navbar-brand { font-weight: 700; letter-spacing: 1px; }
+.card-header { font-weight: 600; background: #f8f9fa; }
+.period-badge { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-weight: 600; font-size: 13px; color: #fff; }
+.period-busy { background: #e53935; }
+.period-free { background: #43a047; }
+.period-outside { background: #9e9e9e; }
+.search-dropdown { position: absolute; z-index: 1000; background: #fff; border: 1px solid #dee2e6; border-radius: 0 0 6px 6px; width: 100%; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.search-dropdown-item { padding: 8px 12px; cursor: pointer; }
+.search-dropdown-item:hover { background: #e3f2fd; }
+.candidate-row:hover { background: #e3f2fd !important; }
+.candidate-scroll { max-height: 350px; overflow-y: auto; }
+.nav-pills .nav-link.active { background: #1a237e; }
+.nav-pills .nav-link { color: #1a237e; }
+.setup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.setup-box { background: #fff; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
+#loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+@media print {
+  .no-print { display: none !important; }
+  .navbar { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="d-none">
+  <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;"></div>
+  <div id="loadingText">Âä†ËΩΩ‰∏≠...</div>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark mb-3 no-print">
+  <div class="container-fluid">
+    <span class="navbar-brand"><i class="bi bi-calendar2-check"></i> Áã¨‰∏≠‰ª£ËØæÂÆâÊéíÁ≥ªÁªü</span>
+    <div>
+      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('arrange')"><i class="bi bi-pencil-square"></i> ‰ª£ËØæÂÆâÊéí</button>
+      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('records')"><i class="bi bi-journal-text"></i> ËÆ∞ÂΩï</button>
+      <button class="btn btn-sm btn-outline-light me-1" onclick="showPage('statistics')"><i class="bi bi-bar-chart"></i> ÁªüËÆ°</button>
+      <button class="btn btn-sm btn-outline-light" onclick="showPage('settings')"><i class="bi bi-gear"></i> ËÆæÁΩÆ</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid px-3">
+
+<!-- ==================== PAGE: ARRANGE ==================== -->
+<div id="page-arrange">
+  <div class="row">
+    <div class="col-lg-5">
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-pencil-square"></i> ‰ª£ËØæÂÆâÊéí</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Êó•Êúü</label>
+            <input type="date" id="dateInput" class="form-control">
+            <small class="text-muted" id="dayLabel"></small>
+          </div>
+          <div class="mb-3 position-relative">
+            <label class="form-label fw-bold">Ê∑ªÂä†Áº∫Â∏≠ËÄÅÂ∏à <small class="text-muted">(ÂèØÊ∑ªÂä†Â§ö‰Ωç)</small></label>
+            <input type="text" id="teacherSearch" class="form-control" placeholder="ËæìÂÖ•ËÄÅÂ∏àÂêçÂ≠óÊêúÁ¥¢..." autocomplete="off">
+            <div id="searchDropdown" class="search-dropdown d-none"></div>
+          </div>
+          <div id="absentTeacherList" class="mb-3 d-none">
+            <label class="form-label fw-bold">Áº∫Â∏≠ËÄÅÂ∏àÂàóË°® <span id="absentCount" class="badge bg-danger">0</span></label>
+            <div id="absentTeachers"></div>
+          </div>
+          <div id="arrangeButtons" class="d-none">
+            <button id="autoArrange" class="btn btn-success w-100 mb-2" onclick="doAutoArrange()">
+              <i class="bi bi-lightning-fill"></i> ‰∏ÄÈîÆËá™Âä®ÂÆâÊéí
+            </button>
+            <button id="startArrange" class="btn btn-outline-primary w-100" onclick="doManualArrange()">
+              <i class="bi bi-hand-index"></i> ÊâãÂä®ÈÄê‰∏™ÂÆâÊéí
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-list-check"></i> ‰ªäÊó•‰ª£ËØæÂÆâÊéíÊÄªË°®
+          <button class="btn btn-sm btn-outline-secondary float-end no-print" onclick="printDaily()"><i class="bi bi-printer"></i> ÊâìÂç∞</button>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>ËäÇÊ¨°</th><th>ÂéüÁè≠Á∫ß/ÁßëÁõÆ</th><th>Áº∫Â∏≠ËÄÅÂ∏à</th><th>‰ª£ËØæËÄÅÂ∏à</th><th class="no-print"></th></tr></thead>
+            <tbody id="todaySummary"></tbody>
+          </table>
+          <div id="noRecords" class="text-center text-muted py-3">‰ªäÊó•ÊöÇÊó†‰ª£ËØæÂÆâÊéí</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div id="recommendSection" class="d-none">
+        <div id="recommendPanels"></div>
+      </div>
+      <div id="placeholder" class="text-center text-muted py-5">
+        <i class="bi bi-arrow-left-circle" style="font-size: 3rem;"></i>
+        <p class="mt-3">ËØ∑ÂÖàÈÄâÊã©Êó•ÊúüÔºåÊ∑ªÂä†Áº∫Â∏≠ËÄÅÂ∏àÔºåÁÑ∂ÂêéÂºÄÂßãÂÆâÊéí‰ª£ËØæ</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: RECORDS ==================== -->
+<div id="page-records" class="d-none">
+  <div class="card">
+    <div class="card-header"><i class="bi bi-journal-text"></i> ‰ª£ËØæËÆ∞ÂΩï</div>
+    <div class="card-body">
+      <div class="row g-2 mb-3">
+        <div class="col-auto"><input type="date" id="recDateFrom" class="form-control form-control-sm" placeholder="‰ªé"></div>
+        <div class="col-auto"><input type="date" id="recDateTo" class="form-control form-control-sm" placeholder="Âà∞"></div>
+        <div class="col-auto"><input type="text" id="recTeacher" class="form-control form-control-sm" placeholder="ÊêúÁ¥¢ËÄÅÂ∏à"></div>
+        <div class="col-auto"><button class="btn btn-sm btn-primary" onclick="loadRecords()"><i class="bi bi-search"></i> ÊêúÁ¥¢</button></div>
+      </div>
+      <table class="table table-sm table-striped">
+        <thead><tr><th>Êó•Êúü</th><th>ËäÇÊ¨°</th><th>ÂéüÁè≠Á∫ß</th><th>ÂéüÁßëÁõÆ</th><th>Áº∫Â∏≠ËÄÅÂ∏à</th><th>‰ª£ËØæËÄÅÂ∏à</th><th></th></tr></thead>
+        <tbody id="recordsBody"></tbody>
+      </table>
+      <div id="noRecordsPage" class="text-center text-muted py-3">ÊöÇÊó†ËÆ∞ÂΩï</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: STATISTICS ==================== -->
+<div id="page-statistics" class="d-none">
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-bar-chart"></i> ‰ª£ËØæÁªüËÆ°
+      <button class="btn btn-sm btn-outline-success float-end" onclick="exportStats()"><i class="bi bi-download"></i> ÂØºÂá∫ Excel</button>
+    </div>
+    <div class="card-body">
+      <div class="row g-2 mb-3">
+        <div class="col-auto">
+          <select id="statYear" class="form-select form-select-sm" onchange="loadStats()">
+            <option value="">ÂÖ®ÈÉ®Âπ¥‰ªΩ</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <select id="statMonth" class="form-select form-select-sm" onchange="loadStats()">
+            <option value="">ÂÖ®ÈÉ®Êúà‰ªΩ</option>
+            <option value="1">1Êúà</option><option value="2">2Êúà</option><option value="3">3Êúà</option>
+            <option value="4">4Êúà</option><option value="5">5Êúà</option><option value="6">6Êúà</option>
+            <option value="7">7Êúà</option><option value="8">8Êúà</option><option value="9">9Êúà</option>
+            <option value="10">10Êúà</option><option value="11">11Êúà</option><option value="12">12Êúà</option>
+          </select>
+        </div>
+      </div>
+      <table class="table table-sm table-striped">
+        <thead><tr><th>#</th><th>ËÄÅÂ∏à</th><th>‰ª£ËØæÊ¨°Êï∞</th></tr></thead>
+        <tbody id="statsBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><i class="bi bi-person-x"></i> Áº∫Â∏≠ÁªüËÆ°</div>
+    <div class="card-body">
+      <table class="table table-sm table-striped">
+        <thead><tr><th>#</th><th>ËÄÅÂ∏à</th><th>Ë¢´‰ª£ËØæÊ¨°Êï∞</th></tr></thead>
+        <tbody id="absentStatsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: SETTINGS ==================== -->
+<div id="page-settings" class="d-none">
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-cloud-arrow-up"></i> Google Sheets ËøûÊé•</div>
+        <div class="card-body">
+          <label class="form-label fw-bold">Google Apps Script Web App URL</label>
+          <input type="text" id="apiUrlInput" class="form-control mb-2" placeholder="https://script.google.com/macros/s/.../exec">
+          <button class="btn btn-primary" onclick="saveApiUrl()"><i class="bi bi-check-lg"></i> ‰øùÂ≠òÂπ∂ÊµãËØïËøûÊé•</button>
+          <div id="apiStatus" class="mt-2"></div>
+        </div>
+      </div>
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-file-earmark-spreadsheet"></i> ÂØºÂÖ•ËØæË°®</div>
+        <div class="card-body">
+          <input type="file" id="timetableFile" class="form-control mb-2" accept=".xlsx,.xls">
+          <button class="btn btn-primary" onclick="importTimetable()"><i class="bi bi-upload"></i> ÂØºÂÖ•ËØæË°®</button>
+          <div id="importStatus" class="mt-2"></div>
+          <div id="timetableInfo" class="mt-2 text-muted small"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-clock"></i> ËäÇÊ¨°Êó∂Èó¥</div>
+        <div class="card-body">
+          <div id="periodTimesEditor"></div>
+          <button class="btn btn-primary mt-2" onclick="savePeriodTimes()"><i class="bi bi-check-lg"></i> ‰øùÂ≠òÊó∂Èó¥ËÆæÁΩÆ</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><i class="bi bi-database"></i> Êï∞ÊçÆÁÆ°ÁêÜ</div>
+        <div class="card-body">
+          <button class="btn btn-outline-warning mb-2" onclick="exportLocalData()"><i class="bi bi-download"></i> ÂØºÂá∫Êú¨Âú∞Êï∞ÊçÆÂ§á‰ªΩ</button>
+          <br>
+          <button class="btn btn-outline-info mb-2" onclick="document.getElementById('importBackupFile').click()"><i class="bi bi-upload"></i> ÂØºÂÖ•Êú¨Âú∞Êï∞ÊçÆÂ§á‰ªΩ</button>
+          <input type="file" id="importBackupFile" class="d-none" accept=".json" onchange="importLocalData(event)">
+          <br>
+          <button class="btn btn-outline-danger" onclick="clearLocalData()"><i class="bi bi-trash"></i> Ê∏ÖÈô§ÊâÄÊúâÊú¨Âú∞Êï∞ÊçÆ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- container -->
+
+<script>
+// ============================================================
+// DATA LAYER
+// ============================================================
+const DAY_NAMES = {1:'ÊòüÊúü‰∏Ä',2:'ÊòüÊúü‰∫å',3:'ÊòüÊúü‰∏â',4:'ÊòüÊúüÂõõ',5:'ÊòüÊúü‰∫î',6:'ÊòüÊúüÂÖ≠',0:'ÊòüÊúüÊó•'};
+const MAX_CONSECUTIVE = 4;
+
+const DEFAULT_PERIOD_TIMES = {
+  1:'07:30-08:10', 2:'08:10-08:50', 3:'08:50-09:30', 4:'09:30-10:10',
+  5:'10:30-11:10', 6:'11:10-11:50', 7:'12:30-13:10', 8:'13:10-13:50',
+  9:'13:50-14:30', 10:'14:30-15:10'
+};
+
+// Local storage keys
+const LS_TEACHERS = 'sub_teachers';       // [{id, code, name, full_code}]
+const LS_TIMETABLE = 'sub_timetable';     // [{teacher_id, day_of_week, period, content}]
+const LS_API_URL = 'sub_api_url';
+const LS_PERIOD_TIMES = 'sub_period_times';
+
+// In-memory caches (loaded from localStorage)
+let teachers = [];      // [{id, code, name, full_code}]
+let timetable = [];     // [{teacher_id, day_of_week, period, content}]
+let apiUrl = '';
+let periodTimes = { ...DEFAULT_PERIOD_TIMES };
+
+// Records cache for the current session (fetched from Google Sheets)
+let cachedRecords = [];       // All records from Google Sheets
+let cachedRecordsLoaded = false;
+
+function loadLocalData() {
+  try {
+    teachers = JSON.parse(localStorage.getItem(LS_TEACHERS) || '[]');
+    timetable = JSON.parse(localStorage.getItem(LS_TIMETABLE) || '[]');
+    apiUrl = localStorage.getItem(LS_API_URL) || '';
+    const pt = localStorage.getItem(LS_PERIOD_TIMES);
+    if (pt) periodTimes = JSON.parse(pt);
+  } catch(e) {
+    console.error('Failed to load local data', e);
+  }
+}
+
+function saveTeachers() { localStorage.setItem(LS_TEACHERS, JSON.stringify(teachers)); }
+function saveTimetable() { localStorage.setItem(LS_TIMETABLE, JSON.stringify(timetable)); }
+
+// ============================================================
+// GOOGLE SHEETS API
+// ============================================================
+async function gsApi(params) {
+  if (!apiUrl) throw new Error('ËØ∑ÂÖàÂú®ËÆæÁΩÆÈ°µÈù¢ÈÖçÁΩÆ Google Apps Script URL');
+  const url = new URL(apiUrl);
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.set(k, v); });
+  const resp = await fetch(url.toString());
+  return await resp.json();
+}
+
+async function gsApiPost(params, body) {
+  if (!apiUrl) throw new Error('ËØ∑ÂÖàÂú®ËÆæÁΩÆÈ°µÈù¢ÈÖçÁΩÆ Google Apps Script URL');
+  const url = new URL(apiUrl);
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.set(k, v); });
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return await resp.json();
+}
+
+// Fetch all records (with caching)
+async function fetchAllRecords(force) {
+  if (cachedRecordsLoaded && !force) return cachedRecords;
+  try {
+    const data = await gsApi({ action: 'get_records' });
+    cachedRecords = data.records || [];
+    cachedRecordsLoaded = true;
+  } catch (e) {
+    console.warn('Êó†Ê≥ïËøûÊé• Google SheetsÔºå‰ΩøÁî®Êú¨Âú∞ÁºìÂ≠ò', e);
+    cachedRecords = [];
+  }
+  return cachedRecords;
+}
+
+function getRecordsForDate(date) {
+  return cachedRecords.filter(r => r.date === date);
+}
+
+function getTotalSubCount(teacherName) {
+  return cachedRecords.filter(r => r.substitute_teacher === teacherName).length;
+}
+
+function getTodaySubCount(teacherName, date) {
+  return cachedRecords.filter(r => r.substitute_teacher === teacherName && r.date === date).length;
+}
+
+function getAssignedPeriodsForDate(date) {
+  // returns { teacherName: Set([period...]) }
+  const assigned = {};
+  cachedRecords.filter(r => r.date === date).forEach(r => {
+    if (!assigned[r.substitute_teacher]) assigned[r.substitute_teacher] = new Set();
+    assigned[r.substitute_teacher].add(parseInt(r.period));
+  });
+  return assigned;
+}
+
+// ============================================================
+// TIMETABLE PARSER (client-side using SheetJS)
+// ============================================================
+function parseTeacherName(fullCode) {
+  const m = fullCode.match(/^([A-Za-z_]+)([\u4e00-\u9fff].*)$/);
+  if (m) return { code: m[1], name: m[2] };
+  return { code: fullCode, name: fullCode };
+}
+
+function parseCellContent(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (text.includes('\n')) {
+    const parts = text.split('\n');
+    return { class_info: parts[0].trim(), subject: parts[1].trim() };
+  }
+  return { class_info: text, subject: text };
+}
+
+function importTimetable() {
+  const fileInput = document.getElementById('timetableFile');
+  const statusEl = document.getElementById('importStatus');
+  if (!fileInput.files.length) {
+    statusEl.innerHTML = '<div class="alert alert-warning py-1">ËØ∑ÈÄâÊã©Êñá‰ª∂</div>';
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+
+      // Find the sheet - try "Table 1" first, then first sheet
+      let sheetName = 'Table 1';
+      if (!wb.SheetNames.includes(sheetName)) sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      const newTeachers = [];
+      const newTimetable = [];
+      let teacherId = 1;
+
+      for (let row = 2; row <= range.e.r; row++) { // row 0=header1, row 1=header2, data from row 2
+        const cellA = ws[XLSX.utils.encode_cell({ r: row, c: 0 })];
+        if (!cellA || !cellA.v) continue;
+        const fullCode = String(cellA.v).trim();
+        if (!fullCode || fullCode === '#N/A') continue;
+
+        const { code, name } = parseTeacherName(fullCode);
+        const tid = teacherId++;
+        newTeachers.push({ id: tid, code, name, full_code: fullCode });
+
+        for (let day = 1; day <= 5; day++) {
+          for (let period = 1; period <= 10; period++) {
+            const col = (day - 1) * 10 + period; // col 1 is A (teacher name), col 1+ is timetable
+            const cell = ws[XLSX.utils.encode_cell({ r: row, c: col })];
+            if (cell && cell.v != null) {
+              const content = String(cell.v).trim();
+              if (content) {
+                newTimetable.push({ teacher_id: tid, day_of_week: day, period: period, content: content });
+              }
+            }
+          }
+        }
+      }
+
+      teachers = newTeachers;
+      timetable = newTimetable;
+      saveTeachers();
+      saveTimetable();
+
+      statusEl.innerHTML = `<div class="alert alert-success py-1">ÂØºÂÖ•ÊàêÂäüÔºÅ${teachers.length} ‰ΩçËÄÅÂ∏àÔºå${timetable.length} Êù°ËØæÁ®ãËÆ∞ÂΩï</div>`;
+      updateTimetableInfo();
+    } catch (err) {
+      statusEl.innerHTML = `<div class="alert alert-danger py-1">ÂØºÂÖ•Â§±Ë¥•: ${err.message}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updateTimetableInfo() {
+  const el = document.getElementById('timetableInfo');
+  if (el) {
+    if (teachers.length > 0) {
+      el.textContent = `Â∑≤ÂØºÂÖ•ËØæË°®: ${teachers.length} ‰ΩçËÄÅÂ∏à`;
+    } else {
+      el.textContent = 'Â∞öÊú™ÂØºÂÖ•ËØæË°®';
+    }
+  }
+}
+
+// ============================================================
+// TIMETABLE QUERIES (local)
+// ============================================================
+function getTeacherSchedule(teacherId, dayOfWeek) {
+  const schedule = {};
+  for (let p = 1; p <= 10; p++) schedule[p] = null;
+  timetable.filter(t => t.teacher_id === teacherId && t.day_of_week === dayOfWeek)
+    .forEach(t => { schedule[t.period] = t.content; });
+  return schedule;
+}
+
+function searchTeachers(query) {
+  if (!query) return [];
+  const q = query.toLowerCase();
+  return teachers.filter(t =>
+    t.full_code.toLowerCase().includes(q) ||
+    t.name.toLowerCase().includes(q) ||
+    t.code.toLowerCase().includes(q)
+  ).slice(0, 20);
+}
+
+function getTeacherById(id) {
+  return teachers.find(t => t.id === id);
+}
+
+function getDayOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay(); // 0=Sun
+  // Convert: 1=Mon...5=Fri
+  if (dow === 0) return 7;
+  return dow;
+}
+
+// ============================================================
+// RECOMMENDATION ENGINE (runs locally)
+// ============================================================
+function checkMaxConsecutive(busySet, newPeriod) {
+  const all = new Set(busySet);
+  all.add(newPeriod);
+  let left = newPeriod;
+  while (all.has(left - 1)) left--;
+  let right = newPeriod;
+  while (all.has(right + 1)) right++;
+  return right - left + 1;
+}
+
+function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName) {
+  const assigned = getAssignedPeriodsForDate(date);
+  const candidates = [];
+
+  teachers.forEach(t => {
+    if (t.full_code === absentTeacherName) return;
+
+    const schedule = getTeacherSchedule(t.id, dayOfWeek);
+    const busyPeriods = [];
+    for (let p = 1; p <= 10; p++) {
+      if (schedule[p] !== null) busyPeriods.push(p);
+    }
+
+    if (busyPeriods.length === 0) return; // not working today
+
+    const firstPeriod = Math.min(...busyPeriods);
+    const lastPeriod = Math.max(...busyPeriods);
+
+    // Must be free this period
+    if (schedule[period] !== null) return;
+
+    // Check if already assigned this period
+    const teacherAssigned = assigned[t.full_code];
+    if (teacherAssigned && teacherAssigned.has(period)) return;
+
+    // Determine tag
+    let tag;
+    if (period < firstPeriod) tag = 'early';
+    else if (period > lastPeriod) tag = 'late';
+    else tag = 'normal';
+
+    // Build busy set (regular + assigned)
+    const busySet = new Set(busyPeriods);
+    if (teacherAssigned) teacherAssigned.forEach(p => busySet.add(p));
+
+    const consecutive = checkMaxConsecutive(busySet, period);
+    const consecutiveWarning = consecutive >= MAX_CONSECUTIVE;
+
+    const totalSubs = getTotalSubCount(t.full_code);
+    const todaySubs = getTodaySubCount(t.full_code, date);
+
+    candidates.push({
+      teacher_id: t.id,
+      full_code: t.full_code,
+      total_subs: totalSubs,
+      today_subs: todaySubs,
+      tag: tag,
+      first_period: firstPeriod,
+      last_period: lastPeriod,
+      consecutive: consecutive,
+      consecutive_warning: consecutiveWarning
+    });
+  });
+
+  // Sort
+  const tagOrder = { normal: 0, early: 1, late: 1 };
+  candidates.sort((a, b) =>
+    (tagOrder[a.tag] - tagOrder[b.tag]) ||
+    (a.consecutive_warning - b.consecutive_warning) ||
+    (a.today_subs - b.today_subs) ||
+    (a.total_subs - b.total_subs) ||
+    a.full_code.localeCompare(b.full_code)
+  );
+
+  return candidates.slice(0, 50);
+}
+
+// ============================================================
+// UI: PAGE NAVIGATION
+// ============================================================
+function showPage(name) {
+  ['arrange', 'records', 'statistics', 'settings'].forEach(p => {
+    document.getElementById('page-' + p).classList.toggle('d-none', p !== name);
+  });
+  if (name === 'records') loadRecords();
+  if (name === 'statistics') { initStatYears(); loadStats(); }
+  if (name === 'settings') {
+    document.getElementById('apiUrlInput').value = apiUrl;
+    renderPeriodTimesEditor();
+    updateTimetableInfo();
+  }
+}
+
+// ============================================================
+// UI: ARRANGE PAGE
+// ============================================================
+let absentList = []; // [{id, full_code, classes, selectedPeriods}]
+
+function updateDayLabel() {
+  const dateStr = document.getElementById('dateInput').value;
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  const label = document.getElementById('dayLabel');
+  label.textContent = DAY_NAMES[dow] || '';
+  if (dow === 0 || dow === 6) {
+    label.innerHTML = '<span class="text-danger">' + DAY_NAMES[dow] + 'ÔºàÈùûÂ∑•‰ΩúÊó•Ôºâ</span>';
+  }
+}
+
+document.getElementById('dateInput').addEventListener('change', function() {
+  updateDayLabel();
+  loadTodaySummary();
+  resetAll();
+});
+
+// Teacher search
+let searchTimeout;
+document.getElementById('teacherSearch').addEventListener('input', function() {
+  clearTimeout(searchTimeout);
+  const q = this.value.trim();
+  if (q.length < 1) { hideDropdown(); return; }
+  searchTimeout = setTimeout(() => {
+    const existingIds = new Set(absentList.map(a => a.id));
+    const results = searchTeachers(q).filter(t => !existingIds.has(t.id));
+    showDropdown(results);
+  }, 100);
+});
+
+function showDropdown(list) {
+  const dd = document.getElementById('searchDropdown');
+  if (list.length === 0) { hideDropdown(); return; }
+  dd.innerHTML = list.map(t =>
+    `<div class="search-dropdown-item" onclick="addAbsentTeacher(${t.id})">${t.full_code}</div>`
+  ).join('');
+  dd.classList.remove('d-none');
+}
+
+function hideDropdown() {
+  document.getElementById('searchDropdown').classList.add('d-none');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#teacherSearch') && !e.target.closest('#searchDropdown')) hideDropdown();
+});
+
+function addAbsentTeacher(id) {
+  hideDropdown();
+  document.getElementById('teacherSearch').value = '';
+
+  if (absentList.find(a => a.id === id)) return;
+
+  const teacher = getTeacherById(id);
+  if (!teacher) return;
+
+  const dateStr = document.getElementById('dateInput').value;
+  const dow = getDayOfWeek(dateStr);
+  if (dow > 5) { alert('ËØ•Êó•Êúü‰∏çÊòØÂ∑•‰ΩúÊó•'); return; }
+
+  const schedule = getTeacherSchedule(id, dow);
+  const classes = [];
+  for (let p = 1; p <= 10; p++) {
+    if (schedule[p]) {
+      const parsed = parseCellContent(schedule[p]);
+      if (parsed) {
+        classes.push({ period: p, class_info: parsed.class_info, subject: parsed.subject, raw: schedule[p] });
+      }
+    }
+  }
+
+  absentList.push({
+    id: id,
+    full_code: teacher.full_code,
+    classes: classes,
+    selectedPeriods: classes.map(c => c.period)
+  });
+  renderAbsentList();
+}
+
+function removeAbsentTeacher(id) {
+  absentList = absentList.filter(a => a.id !== id);
+  renderAbsentList();
+  document.getElementById('recommendSection').classList.add('d-none');
+  document.getElementById('placeholder').classList.remove('d-none');
+}
+
+function togglePeriod(teacherId, period) {
+  const teacher = absentList.find(a => a.id === teacherId);
+  if (!teacher) return;
+  const idx = teacher.selectedPeriods.indexOf(period);
+  if (idx >= 0) teacher.selectedPeriods.splice(idx, 1);
+  else { teacher.selectedPeriods.push(period); teacher.selectedPeriods.sort((a,b) => a-b); }
+  renderAbsentList();
+}
+
+function renderAbsentList() {
+  const container = document.getElementById('absentTeachers');
+  const listSection = document.getElementById('absentTeacherList');
+  const arrangeButtons = document.getElementById('arrangeButtons');
+  const countBadge = document.getElementById('absentCount');
+
+  if (absentList.length === 0) {
+    listSection.classList.add('d-none');
+    arrangeButtons.classList.add('d-none');
+    return;
+  }
+
+  listSection.classList.remove('d-none');
+  countBadge.textContent = absentList.length;
+
+  const totalPeriods = absentList.reduce((sum, a) => sum + a.selectedPeriods.length, 0);
+  if (totalPeriods > 0) {
+    arrangeButtons.classList.remove('d-none');
+    document.getElementById('autoArrange').innerHTML =
+      `<i class="bi bi-lightning-fill"></i> ‰∏ÄÈîÆËá™Âä®ÂÆâÊéíÔºà${absentList.length} ‰ΩçËÄÅÂ∏àÔºå${totalPeriods} ËäÇËØæÔºâ`;
+  } else {
+    arrangeButtons.classList.add('d-none');
+  }
+
+  container.innerHTML = absentList.map(a => {
+    const classesHtml = a.classes.length === 0
+      ? '<div class="text-muted small ms-2">ÂΩìÂ§©Ê≤°ÊúâËØæÁ®ãÂÆâÊéí</div>'
+      : a.classes.map(c => {
+          const checked = a.selectedPeriods.includes(c.period) ? 'checked' : '';
+          return `<div class="form-check form-check-inline ms-2">
+            <input class="form-check-input" type="checkbox" ${checked}
+                   onchange="togglePeriod(${a.id}, ${c.period})" id="cb_${a.id}_${c.period}">
+            <label class="form-check-label small" for="cb_${a.id}_${c.period}">
+              Á¨¨${c.period}ËäÇ <span class="text-muted">${c.class_info}/${c.subject}</span>
+            </label>
+          </div>`;
+        }).join('');
+
+    return `<div class="border rounded p-2 mb-2">
+      <div class="d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-person-x text-danger"></i> ${a.full_code}</strong>
+        <div>
+          <span class="badge bg-info">${a.selectedPeriods.length}/${a.classes.length} ËäÇ</span>
+          <button class="btn btn-sm btn-outline-danger ms-1" onclick="removeAbsentTeacher(${a.id})" title="ÁßªÈô§">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      </div>
+      <div class="mt-1">${classesHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function collectAllTasks() {
+  const tasks = [];
+  absentList.forEach(a => {
+    a.selectedPeriods.forEach(p => {
+      const cls = a.classes.find(c => c.period === p);
+      if (cls) {
+        tasks.push({
+          teacherId: a.id,
+          teacherName: a.full_code,
+          period: cls.period,
+          class_info: cls.class_info,
+          subject: cls.subject
+        });
+      }
+    });
+  });
+  tasks.sort((a, b) => a.period - b.period || a.teacherName.localeCompare(b.teacherName));
+  return tasks;
+}
+
+// --- Auto arrange ---
+async function doAutoArrange() {
+  const tasks = collectAllTasks();
+  if (tasks.length === 0) { alert('ËØ∑Ëá≥Â∞ëÂãæÈÄâ‰∏Ä‰∏™ËäÇÊ¨°'); return; }
+
+  const dateStr = document.getElementById('dateInput').value;
+  const dow = getDayOfWeek(dateStr);
+  const btn = document.getElementById('autoArrange');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ëá™Âä®ÂÆâÊéí‰∏≠...';
+
+  // Fetch latest records
+  await fetchAllRecords(true);
+
+  const results = [];
+  for (const task of tasks) {
+    const candidates = recommendSubstitutes(dateStr, dow, task.period, task.teacherName);
+    if (candidates.length > 0) {
+      const best = candidates[0];
+      // Save to Google Sheets
+      try {
+        const resp = await gsApi({
+          action: 'add_record',
+          date: dateStr,
+          absent_teacher: task.teacherName,
+          substitute_teacher: best.full_code,
+          period: task.period,
+          original_class: task.class_info,
+          original_subject: task.subject
+        });
+        // Add to local cache
+        cachedRecords.push({
+          id: resp.id,
+          date: dateStr,
+          absent_teacher: task.teacherName,
+          substitute_teacher: best.full_code,
+          period: task.period,
+          original_class: task.class_info,
+          original_subject: task.subject
+        });
+        results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning });
+      } catch (e) {
+        results.push({ ...task, success: false, error: e.message });
+      }
+    } else {
+      results.push({ ...task, success: false, error: 'Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à' });
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-lightning-fill"></i> ‰∏ÄÈîÆËá™Âä®ÂÆâÊéí';
+  showAutoResults(results, tasks);
+  loadTodaySummary();
+}
+
+function showAutoResults(results, tasks) {
+  const panel = document.getElementById('recommendPanels');
+  panel.innerHTML = '';
+  document.getElementById('placeholder').classList.add('d-none');
+  document.getElementById('recommendSection').classList.remove('d-none');
+
+  const successCount = results.filter(r => r.success).length;
+  const failCount = results.filter(r => !r.success).length;
+  panel.innerHTML += `
+    <div class="alert ${failCount === 0 ? 'alert-success' : 'alert-warning'} d-flex align-items-center">
+      <i class="bi ${failCount === 0 ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'} me-2" style="font-size:1.3rem;"></i>
+      <div>Ëá™Âä®ÂÆâÊéíÂÆåÊàêÔºö<strong>${successCount}</strong> ËäÇÂ∑≤ÂÆâÊéí${failCount > 0 ? `Ôºå<strong class="text-danger">${failCount}</strong> ËäÇÊú™ËÉΩÂÆâÊéí` : ''}</div>
+    </div>
+  `;
+
+  results.forEach((r) => {
+    const cardId = `auto_${r.teacherId}_${r.period}`;
+    if (r.success) {
+      let badges = '';
+      if (r.tag === 'early') badges += ' <span class="badge bg-info text-dark">ÈúÄÊèêÂâç‰∏äÁè≠</span>';
+      if (r.tag === 'late') badges += ' <span class="badge bg-info text-dark">ÈúÄÂª∂Ëøü‰∏ãÁè≠</span>';
+      if (r.consecutive_warning) badges += ` <span class="badge bg-danger">ËøûÁª≠${r.consecutive}ËäÇ</span>`;
+
+      panel.innerHTML += `
+        <div class="card mb-2" id="${cardId}">
+          <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+            <div>
+              <span class="period-badge period-busy me-2">${r.period}</span>
+              <span class="text-muted">${r.class_info}/${r.subject}</span>
+              <span class="text-danger ms-1">(${r.teacherName})</span>
+              <i class="bi bi-arrow-right mx-2"></i>
+              <strong class="text-success">${r.substitute_name}</strong>
+              <small class="text-muted ms-1">Á¥ØËÆ°${r.total_subs}Ê¨°</small>
+              ${badges}
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="changeSubstitute('${esc(r.teacherName)}', ${r.period}, '${esc(r.class_info)}', '${esc(r.subject)}', '${cardId}')">
+              <i class="bi bi-arrow-repeat"></i> Êõ¥Êç¢
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      panel.innerHTML += `
+        <div class="card mb-2 border-danger" id="${cardId}">
+          <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+            <div>
+              <span class="period-badge period-outside me-2">${r.period}</span>
+              <span class="text-muted">${r.class_info}/${r.subject}</span>
+              <span class="text-danger ms-1">(${r.teacherName})</span>
+              <i class="bi bi-arrow-right mx-2"></i>
+              <span class="text-danger"><i class="bi bi-x-circle"></i> Êó†ÂèØÁî®ËÄÅÂ∏à</span>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" onclick="manualPickForPeriod('${esc(r.teacherName)}', ${r.period}, '${esc(r.class_info)}', '${esc(r.subject)}', '${cardId}')">
+              <i class="bi bi-hand-index"></i> ÊâãÂä®ÈÄâÊã©
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  });
+}
+
+function esc(str) { return str.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+async function changeSubstitute(absentTeacherName, period, classInfo, subject, cardId) {
+  const dateStr = document.getElementById('dateInput').value;
+  const dow = getDayOfWeek(dateStr);
+  const card = document.getElementById(cardId);
+
+  // Delete existing record for this absent teacher + period
+  const existing = cachedRecords.find(r => r.absent_teacher === absentTeacherName && parseInt(r.period) === period && r.date === dateStr);
+  if (existing) {
+    try { await gsApi({ action: 'delete_record', id: existing.id }); } catch(e) {}
+    cachedRecords = cachedRecords.filter(r => r.id !== existing.id);
+  }
+
+  const candidates = recommendSubstitutes(dateStr, dow, period, absentTeacherName);
+  card.innerHTML = `
+    <div class="card-header py-2">
+      <i class="bi bi-clock"></i> Á¨¨${period}ËäÇ ‚Äî <span class="text-danger">${absentTeacherName}</span> ‚Äî ${classInfo} / ${subject}
+      <span class="badge bg-warning float-end">ÈáçÊñ∞ÈÄâÊã©</span>
+    </div>
+    <div class="card-body p-0"></div>
+  `;
+  const body = card.querySelector('.card-body');
+  if (candidates.length === 0) {
+    body.innerHTML = '<div class="alert alert-warning m-3">Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à</div>';
+  } else {
+    body.innerHTML = buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject);
+  }
+  loadTodaySummary();
+}
+
+function manualPickForPeriod(absentTeacherName, period, classInfo, subject, cardId) {
+  const dateStr = document.getElementById('dateInput').value;
+  const dow = getDayOfWeek(dateStr);
+  const card = document.getElementById(cardId);
+
+  const candidates = recommendSubstitutes(dateStr, dow, period, absentTeacherName);
+  card.className = 'card mb-2';
+  card.innerHTML = `
+    <div class="card-header py-2">
+      <i class="bi bi-clock"></i> Á¨¨${period}ËäÇ ‚Äî <span class="text-danger">${absentTeacherName}</span> ‚Äî ${classInfo} / ${subject}
+    </div>
+    <div class="card-body p-0"></div>
+  `;
+  const body = card.querySelector('.card-body');
+  if (candidates.length === 0) {
+    body.innerHTML = '<div class="alert alert-warning m-3">Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à</div>';
+  } else {
+    body.innerHTML = buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject);
+  }
+}
+
+function buildCandidateTable(candidates, absentTeacherName, period, classInfo, subject) {
+  const TAG_LABELS = {
+    normal: '',
+    early: '<span class="badge bg-info text-dark">ÈúÄÊèêÂâç‰∏äÁè≠</span>',
+    late: '<span class="badge bg-info text-dark">ÈúÄÂª∂Ëøü‰∏ãÁè≠</span>'
+  };
+
+  const hasNormal = candidates.some(c => c.tag === 'normal');
+  const hasExtended = candidates.some(c => c.tag !== 'normal');
+
+  let html = '<div class="candidate-scroll"><table class="table table-sm table-hover mb-0"><thead class="sticky-top bg-white"><tr><th>ËÄÅÂ∏à</th><th>Áä∂ÊÄÅ</th><th>Á¥ØËÆ°‰ª£ËØæ</th><th>‰ªäÊó•‰ª£ËØæ</th><th></th></tr></thead><tbody>';
+
+  let shownDivider = false;
+  candidates.forEach(c => {
+    if (!shownDivider && hasNormal && hasExtended && c.tag !== 'normal') {
+      shownDivider = true;
+      html += `<tr><td colspan="5" class="text-center text-muted small bg-light py-1">
+        <i class="bi bi-info-circle"></i> ‰ª•‰∏ãËÄÅÂ∏àÈúÄË¶ÅË∞ÉÊï¥‰∏ä‰∏ãÁè≠Êó∂Èó¥
+      </td></tr>`;
+    }
+
+    let statusHtml = TAG_LABELS[c.tag] || '';
+    if (c.consecutive_warning) statusHtml += ` <span class="badge bg-danger">ËøûÁª≠${c.consecutive}ËäÇ</span>`;
+
+    const timeInfo = c.tag !== 'normal' ? `<br><small class="text-muted">Âéü‰∏äÁè≠: Á¨¨${c.first_period}-${c.last_period}ËäÇ</small>` : '';
+    const rowClass = c.consecutive_warning ? 'table-warning' : (c.tag !== 'normal' ? 'table-light' : '');
+
+    html += `<tr class="candidate-row ${rowClass}">
+      <td>${c.full_code}${timeInfo}</td>
+      <td>${statusHtml}</td>
+      <td><span class="badge bg-secondary">${c.total_subs}Ê¨°</span></td>
+      <td><span class="badge ${c.today_subs > 0 ? 'bg-warning text-dark' : 'bg-success'}">${c.today_subs}Ê¨°</span></td>
+      <td><button class="btn btn-sm btn-primary" onclick="assignSubstitute('${esc(absentTeacherName)}', ${period}, '${esc(c.full_code)}', '${esc(classInfo)}', '${esc(subject)}')">
+        <i class="bi bi-check-lg"></i> ÈÄâÊã©
+      </button></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// Manual arrange
+function doManualArrange() {
+  const tasks = collectAllTasks();
+  if (tasks.length === 0) { alert('ËØ∑Ëá≥Â∞ëÂãæÈÄâ‰∏Ä‰∏™ËäÇÊ¨°'); return; }
+
+  const dateStr = document.getElementById('dateInput').value;
+  const dow = getDayOfWeek(dateStr);
+  const panel = document.getElementById('recommendPanels');
+  panel.innerHTML = '';
+  document.getElementById('placeholder').classList.add('d-none');
+  document.getElementById('recommendSection').classList.remove('d-none');
+
+  tasks.forEach(task => {
+    const cardId = `rec_${task.teacherId}_${task.period}`;
+    const candidates = recommendSubstitutes(dateStr, dow, task.period, task.teacherName);
+
+    let bodyHtml;
+    if (candidates.length === 0) {
+      bodyHtml = '<div class="alert alert-warning m-3">Ê≤°ÊúâÂèØÁî®ÁöÑ‰ª£ËØæËÄÅÂ∏à</div>';
+    } else {
+      bodyHtml = buildCandidateTable(candidates, task.teacherName, task.period, task.class_info, task.subject);
+    }
+
+    panel.innerHTML += `
+      <div class="card mb-3" id="${cardId}">
+        <div class="card-header">
+          <i class="bi bi-clock"></i> Á¨¨${task.period}ËäÇ ‚Äî <span class="text-danger">${task.teacherName}</span> ‚Äî ${task.class_info} / ${task.subject}
+          <span id="status_${task.teacherId}_${task.period}" class="badge bg-warning float-end">ÂæÖÂÆâÊéí</span>
+        </div>
+        <div class="card-body p-0">${bodyHtml}</div>
+      </div>
+    `;
+  });
+}
+
+async function assignSubstitute(absentTeacherName, period, subTeacherName, classInfo, subject) {
+  const dateStr = document.getElementById('dateInput').value;
+
+  try {
+    const resp = await gsApi({
+      action: 'add_record',
+      date: dateStr,
+      absent_teacher: absentTeacherName,
+      substitute_teacher: subTeacherName,
+      period: period,
+      original_class: classInfo,
+      original_subject: subject
+    });
+
+    cachedRecords.push({
+      id: resp.id,
+      date: dateStr,
+      absent_teacher: absentTeacherName,
+      substitute_teacher: subTeacherName,
+      period: period,
+      original_class: classInfo,
+      original_subject: subject
+    });
+
+    // Update UI - find the card for this task
+    const absentTeacher = absentList.find(a => a.full_code === absentTeacherName);
+    const teacherId = absentTeacher ? absentTeacher.id : 0;
+
+    // Check auto card
+    const autoCard = document.getElementById(`auto_${teacherId}_${period}`);
+    if (autoCard) {
+      autoCard.innerHTML = `
+        <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+          <div>
+            <span class="period-badge period-busy me-2">${period}</span>
+            <span class="text-muted">${classInfo}/${subject}</span>
+            <span class="text-danger ms-1">(${absentTeacherName})</span>
+            <i class="bi bi-arrow-right mx-2"></i>
+            <strong class="text-success">${subTeacherName}</strong>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" onclick="changeSubstitute('${esc(absentTeacherName)}', ${period}, '${esc(classInfo)}', '${esc(subject)}', 'auto_${teacherId}_${period}')">
+            <i class="bi bi-arrow-repeat"></i> Êõ¥Êç¢
+          </button>
+        </div>
+      `;
+    }
+
+    // Check rec card
+    const recCard = document.getElementById(`rec_${teacherId}_${period}`);
+    if (recCard) {
+      const statusEl = document.getElementById(`status_${teacherId}_${period}`);
+      if (statusEl) {
+        statusEl.className = 'badge bg-success float-end';
+        statusEl.textContent = 'Â∑≤ÂÆâÊéí: ' + subTeacherName;
+      }
+      const body = recCard.querySelector('.card-body');
+      body.innerHTML = `<div class="alert alert-success m-3 mb-0"><i class="bi bi-check-circle"></i> Â∑≤ÂÆâÊéí <strong>${subTeacherName}</strong> ‰ª£ËØæ</div>`;
+    }
+
+    loadTodaySummary();
+  } catch (e) {
+    alert('‰øùÂ≠òÂ§±Ë¥•: ' + e.message);
+  }
+}
+
+// --- Today summary ---
+async function loadTodaySummary() {
+  const dateStr = document.getElementById('dateInput').value;
+  const rows = getRecordsForDate(dateStr);
+  const tbody = document.getElementById('todaySummary');
+  const noRec = document.getElementById('noRecords');
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    noRec.classList.remove('d-none');
+    return;
+  }
+
+  noRec.classList.add('d-none');
+  // Sort by period
+  rows.sort((a, b) => parseInt(a.period) - parseInt(b.period));
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="period-badge period-busy">${r.period}</span></td>
+      <td>${r.original_class || ''} ${r.original_subject || ''}</td>
+      <td>${r.absent_teacher}</td>
+      <td><strong>${r.substitute_teacher}</strong></td>
+      <td class="no-print"><button class="btn btn-sm btn-outline-danger" onclick="deleteSub('${r.id}')"><i class="bi bi-x"></i></button></td>
+    </tr>
+  `).join('');
+}
+
+async function deleteSub(id) {
+  if (!confirm('Á°ÆÂÆöË¶ÅÊí§ÈîÄËøôÊù°‰ª£ËØæÂÆâÊéíÂêóÔºü')) return;
+  try {
+    await gsApi({ action: 'delete_record', id: id });
+    cachedRecords = cachedRecords.filter(r => r.id !== id);
+    loadTodaySummary();
+  } catch (e) {
+    alert('Âà†Èô§Â§±Ë¥•: ' + e.message);
+  }
+}
+
+function resetAll() {
+  absentList = [];
+  renderAbsentList();
+  document.getElementById('teacherSearch').value = '';
+  document.getElementById('recommendSection').classList.add('d-none');
+  document.getElementById('placeholder').classList.remove('d-none');
+}
+
+function printDaily() {
+  window.print();
+}
+
+// ============================================================
+// UI: RECORDS PAGE
+// ============================================================
+async function loadRecords() {
+  const dateFrom = document.getElementById('recDateFrom').value;
+  const dateTo = document.getElementById('recDateTo').value;
+  const teacherQ = document.getElementById('recTeacher').value.trim().toLowerCase();
+
+  await fetchAllRecords(true);
+
+  let records = [...cachedRecords];
+  if (dateFrom) records = records.filter(r => r.date >= dateFrom);
+  if (dateTo) records = records.filter(r => r.date <= dateTo);
+  if (teacherQ) records = records.filter(r =>
+    (r.absent_teacher || '').toLowerCase().includes(teacherQ) ||
+    (r.substitute_teacher || '').toLowerCase().includes(teacherQ)
+  );
+
+  records.sort((a, b) => (b.date || '').localeCompare(a.date || '') || parseInt(a.period) - parseInt(b.period));
+
+  const tbody = document.getElementById('recordsBody');
+  const noRec = document.getElementById('noRecordsPage');
+
+  if (records.length === 0) {
+    tbody.innerHTML = '';
+    noRec.classList.remove('d-none');
+    return;
+  }
+
+  noRec.classList.add('d-none');
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td>${r.period}</td>
+      <td>${r.original_class || ''}</td>
+      <td>${r.original_subject || ''}</td>
+      <td>${r.absent_teacher}</td>
+      <td><strong>${r.substitute_teacher}</strong></td>
+      <td><button class="btn btn-sm btn-outline-danger" onclick="deleteRecordFromPage('${r.id}')"><i class="bi bi-x"></i></button></td>
+    </tr>
+  `).join('');
+}
+
+async function deleteRecordFromPage(id) {
+  if (!confirm('Á°ÆÂÆöË¶ÅÂà†Èô§ËøôÊù°ËÆ∞ÂΩïÂêóÔºü')) return;
+  try {
+    await gsApi({ action: 'delete_record', id: id });
+    cachedRecords = cachedRecords.filter(r => r.id !== id);
+    loadRecords();
+  } catch (e) {
+    alert('Âà†Èô§Â§±Ë¥•: ' + e.message);
+  }
+}
+
+// ============================================================
+// UI: STATISTICS PAGE
+// ============================================================
+function initStatYears() {
+  const sel = document.getElementById('statYear');
+  const currentYear = new Date().getFullYear();
+  sel.innerHTML = '<option value="">ÂÖ®ÈÉ®Âπ¥‰ªΩ</option>';
+  for (let y = currentYear; y >= currentYear - 5; y--) {
+    sel.innerHTML += `<option value="${y}">${y}Âπ¥</option>`;
+  }
+}
+
+async function loadStats() {
+  await fetchAllRecords(true);
+
+  const year = document.getElementById('statYear').value;
+  const month = document.getElementById('statMonth').value;
+
+  let records = [...cachedRecords];
+  if (year) {
+    records = records.filter(r => r.date && r.date.startsWith(year));
+    if (month) {
+      const mm = month.padStart(2, '0');
+      records = records.filter(r => r.date && r.date.startsWith(year + '-' + mm));
+    }
+  }
+
+  // Sub counts
+  const subCounts = {};
+  records.forEach(r => {
+    if (r.substitute_teacher) {
+      subCounts[r.substitute_teacher] = (subCounts[r.substitute_teacher] || 0) + 1;
+    }
+  });
+
+  const sorted = Object.entries(subCounts).sort((a, b) => b[1] - a[1]);
+  const tbody = document.getElementById('statsBody');
+  tbody.innerHTML = sorted.map(([name, count], i) =>
+    `<tr><td>${i + 1}</td><td>${name}</td><td><span class="badge bg-primary">${count}Ê¨°</span></td></tr>`
+  ).join('');
+  if (sorted.length === 0) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">ÊöÇÊó†Êï∞ÊçÆ</td></tr>';
+
+  // Absent counts
+  const absentCounts = {};
+  records.forEach(r => {
+    if (r.absent_teacher) {
+      absentCounts[r.absent_teacher] = (absentCounts[r.absent_teacher] || 0) + 1;
+    }
+  });
+
+  const absentSorted = Object.entries(absentCounts).sort((a, b) => b[1] - a[1]);
+  const absentBody = document.getElementById('absentStatsBody');
+  absentBody.innerHTML = absentSorted.map(([name, count], i) =>
+    `<tr><td>${i + 1}</td><td>${name}</td><td><span class="badge bg-danger">${count}Ê¨°</span></td></tr>`
+  ).join('');
+  if (absentSorted.length === 0) absentBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">ÊöÇÊó†Êï∞ÊçÆ</td></tr>';
+}
+
+function exportStats() {
+  const year = document.getElementById('statYear').value;
+  const month = document.getElementById('statMonth').value;
+
+  let records = [...cachedRecords];
+  if (year) {
+    records = records.filter(r => r.date && r.date.startsWith(year));
+    if (month) {
+      const mm = month.padStart(2, '0');
+      records = records.filter(r => r.date && r.date.startsWith(year + '-' + mm));
+    }
+  }
+
+  const subCounts = {};
+  records.forEach(r => {
+    if (r.substitute_teacher) subCounts[r.substitute_teacher] = (subCounts[r.substitute_teacher] || 0) + 1;
+  });
+
+  const sorted = Object.entries(subCounts).sort((a, b) => b[1] - a[1]);
+  const wsData = [['ËÄÅÂ∏à', '‰ª£ËØæÊ¨°Êï∞'], ...sorted];
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  XLSX.utils.book_append_sheet(wb, ws, '‰ª£ËØæÁªüËÆ°');
+  const filename = `‰ª£ËØæÁªüËÆ°${year ? '_' + year : ''}${month ? '_' + month + 'Êúà' : ''}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+// ============================================================
+// UI: SETTINGS PAGE
+// ============================================================
+function saveApiUrl() {
+  const url = document.getElementById('apiUrlInput').value.trim();
+  const statusEl = document.getElementById('apiStatus');
+
+  if (!url) {
+    statusEl.innerHTML = '<div class="alert alert-warning py-1">ËØ∑ËæìÂÖ• URL</div>';
+    return;
+  }
+
+  apiUrl = url;
+  localStorage.setItem(LS_API_URL, url);
+
+  statusEl.innerHTML = '<div class="alert alert-info py-1"><span class="spinner-border spinner-border-sm"></span> ÊµãËØïËøûÊé•‰∏≠...</div>';
+
+  gsApi({ action: 'get_records' })
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      cachedRecords = data.records || [];
+      cachedRecordsLoaded = true;
+      statusEl.innerHTML = `<div class="alert alert-success py-1"><i class="bi bi-check-circle"></i> ËøûÊé•ÊàêÂäüÔºÅÂ∑≤ËØªÂèñ ${cachedRecords.length} Êù°ËÆ∞ÂΩï</div>`;
+      loadTodaySummary();
+    })
+    .catch(e => {
+      statusEl.innerHTML = `<div class="alert alert-danger py-1"><i class="bi bi-x-circle"></i> ËøûÊé•Â§±Ë¥•: ${e.message}</div>`;
+    });
+}
+
+function renderPeriodTimesEditor() {
+  const el = document.getElementById('periodTimesEditor');
+  let html = '';
+  for (let p = 1; p <= 10; p++) {
+    html += `<div class="row g-2 mb-1">
+      <div class="col-3"><label class="form-label mb-0">Á¨¨${p}ËäÇ</label></div>
+      <div class="col-9"><input type="text" class="form-control form-control-sm" id="pt_${p}" value="${periodTimes[p] || ''}"></div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function savePeriodTimes() {
+  for (let p = 1; p <= 10; p++) {
+    const val = document.getElementById('pt_' + p).value.trim();
+    if (val) periodTimes[p] = val;
+  }
+  localStorage.setItem(LS_PERIOD_TIMES, JSON.stringify(periodTimes));
+  alert('Êó∂Èó¥ËÆæÁΩÆÂ∑≤‰øùÂ≠ò');
+}
+
+function exportLocalData() {
+  const data = {
+    teachers: teachers,
+    timetable: timetable,
+    periodTimes: periodTimes,
+    apiUrl: apiUrl,
+    exportDate: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '‰ª£ËØæÁ≥ªÁªüÂ§á‰ªΩ_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+}
+
+function importLocalData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.teachers) { teachers = data.teachers; saveTeachers(); }
+      if (data.timetable) { timetable = data.timetable; saveTimetable(); }
+      if (data.periodTimes) { periodTimes = data.periodTimes; localStorage.setItem(LS_PERIOD_TIMES, JSON.stringify(periodTimes)); }
+      if (data.apiUrl) { apiUrl = data.apiUrl; localStorage.setItem(LS_API_URL, apiUrl); }
+      alert('Êï∞ÊçÆÂØºÂÖ•ÊàêÂäüÔºÅ');
+      location.reload();
+    } catch (err) {
+      alert('ÂØºÂÖ•Â§±Ë¥•: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearLocalData() {
+  if (!confirm('Á°ÆÂÆöË¶ÅÊ∏ÖÈô§ÊâÄÊúâÊú¨Âú∞Êï∞ÊçÆÂêóÔºüÔºàËØæË°®ÂíåËÆæÁΩÆÂ∞ÜË¢´Ê∏ÖÈô§ÔºåGoogle Sheets ‰∏äÁöÑËÆ∞ÂΩï‰∏çÂèóÂΩ±ÂìçÔºâ')) return;
+  localStorage.removeItem(LS_TEACHERS);
+  localStorage.removeItem(LS_TIMETABLE);
+  localStorage.removeItem(LS_PERIOD_TIMES);
+  teachers = [];
+  timetable = [];
+  periodTimes = { ...DEFAULT_PERIOD_TIMES };
+  alert('Êú¨Âú∞Êï∞ÊçÆÂ∑≤Ê∏ÖÈô§');
+  location.reload();
+}
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
+async function init() {
+  loadLocalData();
+
+  // Set today's date
+  const today = new Date();
+  document.getElementById('dateInput').value = today.toISOString().slice(0, 10);
+  updateDayLabel();
+
+  // Check if setup needed
+  if (teachers.length === 0 || !apiUrl) {
+    showPage('settings');
+    if (teachers.length === 0) {
+      document.getElementById('importStatus').innerHTML = '<div class="alert alert-info py-1">ËØ∑ÂÖàÂØºÂÖ•ËØæË°® Excel Êñá‰ª∂ÔºàÁªÑÂêà.xlsxÔºâ</div>';
+    }
+    if (!apiUrl) {
+      document.getElementById('apiStatus').innerHTML = '<div class="alert alert-info py-1">ËØ∑ÈÖçÁΩÆ Google Apps Script URL ‰ª•ÂêØÁî®ËÆ∞ÂΩïÂ≠òÂÇ®</div>';
+    }
+    return;
+  }
+
+  // Load records from Google Sheets
+  showLoading('Âä†ËΩΩ‰ª£ËØæËÆ∞ÂΩï...');
+  try {
+    await fetchAllRecords(true);
+  } catch(e) {
+    console.warn('Failed to fetch records', e);
+  }
+  hideLoading();
+  loadTodaySummary();
+}
+
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Âä†ËΩΩ‰∏≠...';
+  document.getElementById('loadingOverlay').classList.remove('d-none');
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.add('d-none');
+}
+
+// Start
+init();
+</script>
+</body>
+</html>
