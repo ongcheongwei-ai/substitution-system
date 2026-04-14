@@ -232,6 +232,23 @@ body { background: #f5f6fa; font-size: 14px; }
           <button class="btn btn-primary mt-2" onclick="savePeriodTimes()"><i class="bi bi-check-lg"></i> 保存时间设置</button>
         </div>
       </div>
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-mortarboard"></i> 实习老师管理</div>
+        <div class="card-body">
+          <div class="row g-1 mb-2">
+            <div class="col"><input type="text" id="internSettingName" class="form-control form-control-sm" placeholder="实习老师名字"></div>
+            <div class="col"><input type="date" id="internSettingStart" class="form-control form-control-sm" title="开始日期"></div>
+            <div class="col"><input type="date" id="internSettingEnd" class="form-control form-control-sm" title="结束日期"></div>
+            <div class="col-auto"><button class="btn btn-sm btn-info" onclick="addSavedIntern()"><i class="bi bi-plus"></i> 添加</button></div>
+          </div>
+          <table class="table table-sm table-striped mb-0">
+            <thead><tr><th>名字</th><th>开始日期</th><th>结束日期</th><th>状态</th><th></th></tr></thead>
+            <tbody id="savedInternList"></tbody>
+          </table>
+          <div id="noSavedInterns" class="text-center text-muted small py-2">尚未添加实习老师</div>
+          <small class="text-muted">实习老师在工作日期范围内会自动出现在代课安排页面，每天最多代3节课。</small>
+        </div>
+      </div>
       <div class="card">
         <div class="card-header"><i class="bi bi-database"></i> 数据管理</div>
         <div class="card-body">
@@ -267,12 +284,14 @@ const LS_TEACHERS = 'sub_teachers';       // [{id, code, name, full_code}]
 const LS_TIMETABLE = 'sub_timetable';     // [{teacher_id, day_of_week, period, content}]
 const LS_API_URL = 'sub_api_url';
 const LS_PERIOD_TIMES = 'sub_period_times';
+const LS_SAVED_INTERNS = 'sub_saved_interns'; // [{name, startDate, endDate}]
 
 // In-memory caches (loaded from localStorage)
 let teachers = [];      // [{id, code, name, full_code}]
 let timetable = [];     // [{teacher_id, day_of_week, period, content}]
 let apiUrl = '';
 let periodTimes = { ...DEFAULT_PERIOD_TIMES };
+let savedInterns = []; // [{name, startDate, endDate}]
 
 // Records cache for the current session (fetched from Google Sheets)
 let cachedRecords = [];       // All records from Google Sheets
@@ -285,6 +304,8 @@ function loadLocalData() {
     apiUrl = localStorage.getItem(LS_API_URL) || '';
     const pt = localStorage.getItem(LS_PERIOD_TIMES);
     if (pt) periodTimes = JSON.parse(pt);
+    const si = localStorage.getItem(LS_SAVED_INTERNS);
+    if (si) savedInterns = JSON.parse(si);
   } catch(e) {
     console.error('Failed to load local data', e);
   }
@@ -608,6 +629,7 @@ function showPage(name) {
     document.getElementById('apiUrlInput').value = apiUrl;
     renderPeriodTimesEditor();
     updateTimetableInfo();
+    renderSavedInternList();
   }
 }
 
@@ -634,7 +656,16 @@ document.getElementById('dateInput').addEventListener('change', function() {
   updateDayLabel();
   loadTodaySummary();
   resetAll();
+  loadActiveInterns();
 });
+
+function loadActiveInterns() {
+  const dateStr = document.getElementById('dateInput').value;
+  const activeInterns = getActiveInternsForDate(dateStr);
+  // Clear existing interns and load active ones
+  internTeachers = activeInterns.map(i => ({ name: i.name, maxPeriods: INTERN_MAX_PERIODS }));
+  renderInternList();
+}
 
 // Teacher search
 let searchTimeout;
@@ -1289,10 +1320,10 @@ async function clearTodayAll() {
 function resetAll() {
   absentList = [];
   volunteerTeachers = [];
-  internTeachers = [];
   renderAbsentList();
   renderVolunteerList();
-  renderInternList();
+  // Reload interns from saved settings (don't clear them)
+  loadActiveInterns();
   document.getElementById('teacherSearch').value = '';
   document.getElementById('recommendSection').classList.add('d-none');
   document.getElementById('placeholder').classList.remove('d-none');
@@ -1493,12 +1524,65 @@ function savePeriodTimes() {
   alert('时间设置已保存');
 }
 
+// ---- Saved Intern Management (Settings page) ----
+function addSavedIntern() {
+  const name = document.getElementById('internSettingName').value.trim();
+  const startDate = document.getElementById('internSettingStart').value;
+  const endDate = document.getElementById('internSettingEnd').value;
+  if (!name || !startDate || !endDate) { alert('请填写名字、开始日期和结束日期'); return; }
+  if (startDate > endDate) { alert('开始日期不能晚于结束日期'); return; }
+  if (savedInterns.find(i => i.name === name && i.startDate === startDate)) { alert('已存在相同的实习老师'); return; }
+  savedInterns.push({ name, startDate, endDate });
+  localStorage.setItem(LS_SAVED_INTERNS, JSON.stringify(savedInterns));
+  document.getElementById('internSettingName').value = '';
+  document.getElementById('internSettingStart').value = '';
+  document.getElementById('internSettingEnd').value = '';
+  renderSavedInternList();
+}
+
+function removeSavedIntern(idx) {
+  savedInterns.splice(idx, 1);
+  localStorage.setItem(LS_SAVED_INTERNS, JSON.stringify(savedInterns));
+  renderSavedInternList();
+}
+
+function renderSavedInternList() {
+  const tbody = document.getElementById('savedInternList');
+  const noEl = document.getElementById('noSavedInterns');
+  if (savedInterns.length === 0) {
+    tbody.innerHTML = '';
+    noEl.classList.remove('d-none');
+    return;
+  }
+  noEl.classList.add('d-none');
+  const today = new Date().toISOString().slice(0, 10);
+  tbody.innerHTML = savedInterns.map((intern, i) => {
+    const isActive = today >= intern.startDate && today <= intern.endDate;
+    const statusBadge = isActive
+      ? '<span class="badge bg-success">进行中</span>'
+      : (today < intern.startDate ? '<span class="badge bg-warning text-dark">未开始</span>' : '<span class="badge bg-secondary">已结束</span>');
+    return `<tr>
+      <td>${intern.name}</td>
+      <td>${intern.startDate}</td>
+      <td>${intern.endDate}</td>
+      <td>${statusBadge}</td>
+      <td><button class="btn btn-sm btn-outline-danger" onclick="removeSavedIntern(${i})"><i class="bi bi-x"></i></button></td>
+    </tr>`;
+  }).join('');
+}
+
+// Get active interns for a specific date
+function getActiveInternsForDate(dateStr) {
+  return savedInterns.filter(i => dateStr >= i.startDate && dateStr <= i.endDate);
+}
+
 function exportLocalData() {
   const data = {
     teachers: teachers,
     timetable: timetable,
     periodTimes: periodTimes,
     apiUrl: apiUrl,
+    savedInterns: savedInterns,
     exportDate: new Date().toISOString()
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1519,6 +1603,7 @@ function importLocalData(event) {
       if (data.timetable) { timetable = data.timetable; saveTimetable(); }
       if (data.periodTimes) { periodTimes = data.periodTimes; localStorage.setItem(LS_PERIOD_TIMES, JSON.stringify(periodTimes)); }
       if (data.apiUrl) { apiUrl = data.apiUrl; localStorage.setItem(LS_API_URL, apiUrl); }
+      if (data.savedInterns) { savedInterns = data.savedInterns; localStorage.setItem(LS_SAVED_INTERNS, JSON.stringify(savedInterns)); }
       alert('数据导入成功！');
       location.reload();
     } catch (err) {
@@ -1533,9 +1618,11 @@ function clearLocalData() {
   localStorage.removeItem(LS_TEACHERS);
   localStorage.removeItem(LS_TIMETABLE);
   localStorage.removeItem(LS_PERIOD_TIMES);
+  localStorage.removeItem(LS_SAVED_INTERNS);
   teachers = [];
   timetable = [];
   periodTimes = { ...DEFAULT_PERIOD_TIMES };
+  savedInterns = [];
   alert('本地数据已清除');
   location.reload();
 }
@@ -1572,6 +1659,7 @@ async function init() {
   }
   hideLoading();
   loadTodaySummary();
+  loadActiveInterns();
 }
 
 function showLoading(text) {
