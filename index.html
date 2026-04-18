@@ -1290,10 +1290,19 @@ async function doAutoArrange() {
     }
 
     const { regular, interns } = recommendAll(dateStr, dow, task.period, task.teacherName, task.class_info);
-    // Prioritize interns (must do 3 periods/day) unless duty/volunteer regular candidate exists
-    const topRegular = regular[0];
-    const hasSpecialRegular = topRegular && (topRegular.isOnDuty || topRegular.isVolunteer);
-    const allCandidates = hasSpecialRegular ? [...regular, ...interns] : [...interns, ...regular];
+    // Merge + sort: duty > volunteer > intern (must do 3/day) > regular
+    const merged = [...regular, ...interns];
+    merged.sort((a, b) =>
+      ((b.isOnDuty ? 1 : 0) - (a.isOnDuty ? 1 : 0)) ||
+      ((b.isVolunteer ? 1 : 0) - (a.isVolunteer ? 1 : 0)) ||
+      ((b.isIntern ? 1 : 0) - (a.isIntern ? 1 : 0)) ||
+      ((a.consecutiveDayWarning ? 1 : 0) - (b.consecutiveDayWarning ? 1 : 0)) ||
+      ((a.consecutive_warning ? 1 : 0) - (b.consecutive_warning ? 1 : 0)) ||
+      ((a.today_subs || 0) - (b.today_subs || 0)) ||
+      ((a.total_subs || 0) - (b.total_subs || 0))
+    );
+    console.log('[AutoArrange] Period', task.period, task.teacherName, '→ candidates:', merged.length, 'interns:', interns.length, 'top:', merged[0]?.full_code, merged[0]?.isIntern ? '(实习)' : '');
+    const allCandidates = merged;
     if (allCandidates.length > 0) {
       const best = allCandidates[0];
       const tempRecord = {
