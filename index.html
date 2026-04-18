@@ -491,12 +491,15 @@ async function gsApiPost(params, body) {
   if (!apiUrl) throw new Error('请先在设置页面配置 Google Apps Script URL');
   const url = new URL(apiUrl);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.set(k, v); });
+  // Use text/plain to avoid CORS preflight (Apps Script doesn't handle OPTIONS)
   const resp = await fetch(url.toString(), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body)
   });
-  return await resp.json();
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const text = await resp.text();
+  try { return JSON.parse(text); } catch(e) { throw new Error('Bad response: ' + text.slice(0, 200)); }
 }
 
 // Fetch all records (with caching)
@@ -1319,36 +1322,73 @@ async function doAutoArrange() {
     }
   }
 
-  // Second pass: batch save all to Google Sheets in ONE API call
-  if (toSave.length > 0) {
-    try {
-      const resp = await gsApiPost({ action: 'add_records' }, {
-        records: toSave.map(r => ({
-          date: r.date,
-          absent_teacher: r.absent_teacher,
-          substitute_teacher: r.substitute_teacher,
-          period: r.period,
-          original_class: r.original_class,
-          original_subject: r.original_subject,
-          leave_type: r.leave_type || ''
-        }))
-      });
-      // Update temp IDs with real IDs
-      if (resp.ids) {
-        resp.ids.forEach((realId, i) => {
-          const temp = toSave[i];
-          const cached = cachedRecords.find(r => r.id === temp.id);
-          if (cached) cached.id = realId;
-        });
-      }
-    } catch (e) {
-      console.warn('Batch save failed, records saved locally only:', e.message);
-    }
-  }
+  // Keep toSave in a module-level variable so user can confirm later
+  pendingToSave = toSave;
+  pendingResults = results;
 
   btn.disabled = false;
   btn.innerHTML = '<i class="bi bi-lightning-fill"></i> 一键自动安排';
   showAutoResults(results, tasks);
+  loadTodaySummary();
+}
+
+// Pending arrangement state (not yet saved to Google Sheets)
+let pendingToSave = [];
+let pendingResults = [];
+
+async function confirmPendingArrangements() {
+  if (pendingToSave.length === 0) { alert('没有待提交的代课安排'); return; }
+  const confirmBtn = document.getElementById('confirmArrangeBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 提交中...';
+  }
+  try {
+    const resp = await gsApiPost({ action: 'add_records' }, {
+      records: pendingToSave.map(r => ({
+        date: r.date,
+        absent_teacher: r.absent_teacher,
+        substitute_teacher: r.substitute_teacher,
+        period: r.period,
+        original_class: r.original_class,
+        original_subject: r.original_subject,
+        leave_type: r.leave_type || ''
+      }))
+    });
+    if (resp.error) throw new Error(resp.error);
+    // Update temp IDs with real IDs
+    if (resp.ids) {
+      resp.ids.forEach((realId, i) => {
+        const temp = pendingToSave[i];
+        const cached = cachedRecords.find(r => r.id === temp.id);
+        if (cached) cached.id = realId;
+      });
+    }
+    pendingToSave = [];
+    pendingResults = [];
+    alert(`成功提交 ${resp.count || resp.ids.length} 条代课记录！`);
+    loadTodaySummary();
+    // Hide confirm button
+    if (confirmBtn) confirmBtn.style.display = 'none';
+  } catch(e) {
+    alert('提交失败: ' + e.message + '\n\n记录未能保存到 Google Sheets。请检查网络或 Apps Script 部署。');
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = '<i class="bi bi-check-circle"></i> 确定提交代课';
+    }
+  }
+}
+
+function cancelPendingArrangements() {
+  if (pendingToSave.length === 0) return;
+  if (!confirm('取消当前自动安排？将清除所有未提交的代课记录。')) return;
+  // Remove temp records from cache
+  const tempIds = new Set(pendingToSave.map(r => r.id));
+  cachedRecords = cachedRecords.filter(r => !tempIds.has(r.id));
+  pendingToSave = [];
+  pendingResults = [];
+  document.getElementById('recommendSection').classList.add('d-none');
+  document.getElementById('placeholder').classList.remove('d-none');
   loadTodaySummary();
 }
 
@@ -1368,7 +1408,16 @@ function showAutoResults(results, tasks) {
       <div>
         自动安排完成：<strong>${successCount}</strong> 节已安排${failCount > 0 ? `，<strong class="text-danger">${failCount}</strong> 节未能安排` : ''}
         ${selfStudyCount > 0 ? `<br><small class="text-muted">其中 ${seniorSelfCount} 节高中自习，${selfStudyCount - seniorSelfCount} 节初中自习</small>` : ''}
+        <br><small class="text-warning"><i class="bi bi-info-circle"></i> 以下为预览，请确认无误后点击下方"确定提交代课"按钮才会保存</small>
       </div>
+    </div>
+    <div class="d-flex gap-2 mb-3">
+      <button id="confirmArrangeBtn" class="btn btn-success flex-fill" onclick="confirmPendingArrangements()">
+        <i class="bi bi-check-circle"></i> 确定提交代课
+      </button>
+      <button class="btn btn-outline-secondary" onclick="cancelPendingArrangements()">
+        <i class="bi bi-x-circle"></i> 取消
+      </button>
     </div>
   `;
 
@@ -1420,11 +1469,17 @@ async function changeSubstitute(absentTeacherName, period, classInfo, subject, c
   const dow = getDayOfWeek(dateStr);
   const card = document.getElementById(cardId);
 
-  // Delete existing record for this absent teacher + period
+  // Remove existing record for this absent teacher + period
   const existing = cachedRecords.find(r => r.absent_teacher === absentTeacherName && parseInt(r.period) === period && r.date === dateStr);
   if (existing) {
-    try { await gsApi({ action: 'delete_record', id: existing.id }); } catch(e) {}
+    const isPending = String(existing.id).startsWith('temp_');
+    if (!isPending) {
+      // Already saved to Sheets - delete from Sheets
+      try { await gsApi({ action: 'delete_record', id: existing.id }); } catch(e) {}
+    }
     cachedRecords = cachedRecords.filter(r => r.id !== existing.id);
+    // Also remove from pendingToSave
+    pendingToSave = pendingToSave.filter(r => r.id !== existing.id);
   }
 
   const { regular, interns } = recommendAll(dateStr, dow, period, absentTeacherName, classInfo);
@@ -1573,32 +1628,50 @@ function doManualArrange() {
 
 async function assignSubstitute(absentTeacherName, period, subTeacherName, classInfo, subject) {
   const dateStr = document.getElementById('dateInput').value;
+  const absentTeacher = absentList.find(a => a.full_code === absentTeacherName);
+  const teacherId = absentTeacher ? absentTeacher.id : 0;
+
+  // Check if there's a pending arrangement (auto-arrange preview mode)
+  const hasPending = pendingToSave.length > 0 || document.getElementById('confirmArrangeBtn');
 
   try {
-    const resp = await gsApi({
-      action: 'add_record',
-      date: dateStr,
-      absent_teacher: absentTeacherName,
-      substitute_teacher: subTeacherName,
-      period: period,
-      original_class: classInfo,
-      original_subject: subject
-    });
+    if (hasPending) {
+      // Add to pending, don't save to Sheets yet
+      const tempRecord = {
+        id: 'temp_' + teacherId + '_' + period,
+        date: dateStr,
+        absent_teacher: absentTeacherName,
+        substitute_teacher: subTeacherName,
+        period: String(period),
+        original_class: classInfo,
+        original_subject: subject
+      };
+      cachedRecords.push(tempRecord);
+      pendingToSave.push(tempRecord);
+    } else {
+      // Direct save (manual arrange flow)
+      const resp = await gsApi({
+        action: 'add_record',
+        date: dateStr,
+        absent_teacher: absentTeacherName,
+        substitute_teacher: subTeacherName,
+        period: period,
+        original_class: classInfo,
+        original_subject: subject
+      });
+      if (resp.error) throw new Error(resp.error);
+      cachedRecords.push({
+        id: resp.id,
+        date: dateStr,
+        absent_teacher: absentTeacherName,
+        substitute_teacher: subTeacherName,
+        period: period,
+        original_class: classInfo,
+        original_subject: subject
+      });
+    }
 
-    cachedRecords.push({
-      id: resp.id,
-      date: dateStr,
-      absent_teacher: absentTeacherName,
-      substitute_teacher: subTeacherName,
-      period: period,
-      original_class: classInfo,
-      original_subject: subject
-    });
-
-    // Update UI - find the card for this task
-    const absentTeacher = absentList.find(a => a.full_code === absentTeacherName);
-    const teacherId = absentTeacher ? absentTeacher.id : 0;
-
+    // Update UI - find the card for this task (teacherId already defined above)
     // Check auto card
     const autoCard = document.getElementById(`auto_${teacherId}_${period}`);
     if (autoCard) {
