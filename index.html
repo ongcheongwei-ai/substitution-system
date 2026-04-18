@@ -112,6 +112,24 @@ body { background: #f5f6fa; font-size: 14px; }
             <div id="internList" class="d-flex flex-wrap gap-1 mt-1"></div>
           </div>
 
+          <!-- Today's mandatory duty -->
+          <div class="mb-3">
+            <label class="form-label fw-bold"><i class="bi bi-bullseye" style="color:#ff6b35"></i> 今日义务代课 <small class="text-muted">(特定节必须代课)</small></label>
+            <div class="row g-1 mb-1">
+              <div class="col position-relative">
+                <input type="text" id="dutyTeacher" class="form-control form-control-sm" placeholder="老师名字..." autocomplete="off">
+                <div id="dutyTeacherDropdown" class="search-dropdown d-none"></div>
+              </div>
+              <div class="col">
+                <input type="text" id="dutyPeriods" class="form-control form-control-sm" placeholder="节次 (如 3,5)">
+              </div>
+              <div class="col-auto">
+                <button class="btn btn-sm btn-outline-warning" onclick="addDutyRecord()"><i class="bi bi-plus"></i></button>
+              </div>
+            </div>
+            <div id="dutyList" class="d-flex flex-wrap gap-1 mt-1"></div>
+          </div>
+
           <div id="arrangeButtons" class="d-none">
             <button id="autoArrange" class="btn btn-success w-100 mb-2" onclick="doAutoArrange()">
               <i class="bi bi-lightning-fill"></i> 一键自动安排
@@ -254,9 +272,14 @@ body { background: #f5f6fa; font-size: 14px; }
             <input type="text" id="leaveReason" class="form-control" placeholder="病假/事假/公假...">
           </div>
           <div class="mb-2 d-none" id="longTermSubSection">
-            <label class="form-label fw-bold">指定代课老师 <small class="text-muted">(长期代课)</small></label>
-            <input type="text" id="longTermSubSearch" class="form-control" placeholder="搜索代课老师..." autocomplete="off">
-            <div id="longTermSubDropdown" class="search-dropdown d-none"></div>
+            <label class="form-label fw-bold">长期代课分配</label>
+            <div class="input-group input-group-sm mb-2 position-relative">
+              <input type="text" id="longTermSubSearch" class="form-control" placeholder="全部委任给同一位老师..." autocomplete="off">
+              <button class="btn btn-outline-secondary" onclick="fillAllLongTermPeriods()">应用到全部</button>
+              <div id="longTermSubDropdown" class="search-dropdown d-none"></div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-info mb-2" onclick="showPeriodAssignmentMatrix()"><i class="bi bi-table"></i> 按节次分配（打开课表表格）</button>
+            <div id="periodAssignmentMatrix" class="d-none mt-2"></div>
           </div>
           <button class="btn btn-primary w-100" onclick="submitLeave()"><i class="bi bi-check-lg"></i> 提交请假</button>
           <div id="leaveSubmitStatus" class="mt-2"></div>
@@ -347,6 +370,34 @@ body { background: #f5f6fa; font-size: 14px; }
           <small class="text-muted">实习老师在工作日期范围内会自动出现在代课安排页面，每天最多代3节课。</small>
         </div>
       </div>
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-slash-circle"></i> 老师不可代课时段</div>
+        <div class="card-body">
+          <div class="mb-2 position-relative">
+            <input type="text" id="blackoutTeacher" class="form-control form-control-sm" placeholder="输入老师名字搜索..." autocomplete="off">
+            <div id="blackoutTeacherDropdown" class="search-dropdown d-none"></div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col"><input type="date" id="blackoutStart" class="form-control form-control-sm"></div>
+            <div class="col"><input type="date" id="blackoutEnd" class="form-control form-control-sm"></div>
+          </div>
+          <div class="mb-2"><input type="text" id="blackoutReason" class="form-control form-control-sm" placeholder="原因（如：脚受伤）"></div>
+          <button class="btn btn-sm btn-warning" onclick="addBlackoutRecord()"><i class="bi bi-plus"></i> 添加</button>
+          <div id="blackoutList" class="mt-2"></div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-building"></i> 班级楼宇对照表 <small class="text-muted">(同楼优先推荐)</small></div>
+        <div class="card-body">
+          <small class="text-muted d-block mb-2">Google Sheets CSV 公开链接（A列班级，B列楼宇）</small>
+          <input type="text" id="buildingsUrl" class="form-control form-control-sm mb-2" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv">
+          <button class="btn btn-sm btn-info" onclick="loadBuildingsFromUrl()"><i class="bi bi-download"></i> 加载</button>
+          <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearBuildings()"><i class="bi bi-x"></i> 清空</button>
+          <div id="buildingsStatus" class="mt-2"></div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header"><i class="bi bi-database"></i> 数据管理</div>
         <div class="card-body">
@@ -387,6 +438,7 @@ const LS_API_URL = 'sub_api_url';
 const LS_PERIOD_TIMES = 'sub_period_times';
 const LS_SAVED_INTERNS = 'sub_saved_interns'; // [{name, startDate, endDate}]
 const LS_LEAVES = 'sub_leaves';
+const LS_BUILDINGS = 'sub_buildings';
 
 // In-memory caches (loaded from localStorage)
 let teachers = [];      // [{id, code, name, full_code}]
@@ -397,6 +449,11 @@ let savedInterns = []; // [{name, startDate, endDate}]
 
 let cachedLeaves = [];
 let cachedLeavesLoaded = false;
+let cachedBlackouts = [];
+let cachedBlackoutsLoaded = false;
+let cachedDuties = [];
+let cachedDutiesLoaded = false;
+let classBuildings = {}; // { classInfo: buildingName }
 
 // Records cache for the current session (fetched from Google Sheets)
 let cachedRecords = [];       // All records from Google Sheets
@@ -471,6 +528,72 @@ async function fetchAllLeaves(force) {
 
 function getActiveLeavesForDate(dateStr) {
   return cachedLeaves.filter(l => l.status === 'active' && dateStr >= l.start_date && dateStr <= l.end_date);
+}
+
+async function fetchAllBlackouts(force) {
+  if (cachedBlackoutsLoaded && !force) return cachedBlackouts;
+  try {
+    const data = await gsApi({ action: 'get_blackouts' });
+    cachedBlackouts = data.blackouts || [];
+    cachedBlackoutsLoaded = true;
+  } catch (e) { console.warn('blackouts failed', e); cachedBlackouts = []; }
+  return cachedBlackouts;
+}
+
+function isTeacherBlackedOut(teacherName, date) {
+  return cachedBlackouts.some(b => b.teacher_name === teacherName && date >= b.start_date && date <= b.end_date);
+}
+
+async function fetchAllDuties(force) {
+  if (cachedDutiesLoaded && !force) return cachedDuties;
+  try {
+    const data = await gsApi({ action: 'get_duties' });
+    cachedDuties = data.duties || [];
+    cachedDutiesLoaded = true;
+  } catch (e) { console.warn('duties failed', e); cachedDuties = []; }
+  return cachedDuties;
+}
+
+function getDutiesForDate(date) {
+  return cachedDuties.filter(d => d.date === date);
+}
+
+function isOnDuty(teacherName, date, period) {
+  return cachedDuties.some(d => {
+    if (d.date !== date || d.teacher_name !== teacherName) return false;
+    const periods = String(d.periods || '').split(',').map(p => parseInt(p.trim())).filter(p => p > 0);
+    return periods.includes(period);
+  });
+}
+
+function isSeniorClass(classInfo) {
+  if (!classInfo) return false;
+  return /^S/i.test(String(classInfo).trim());
+}
+
+function getClassBuilding(classInfo) {
+  if (!classInfo || Object.keys(classBuildings).length === 0) return null;
+  if (classBuildings[classInfo]) return classBuildings[classInfo];
+  const match = String(classInfo).match(/^(\S+)/);
+  if (match && classBuildings[match[1]]) return classBuildings[match[1]];
+  return null;
+}
+
+function isSameBuilding(teacherId, dayOfWeek, period, targetClassInfo) {
+  const targetBldg = getClassBuilding(targetClassInfo);
+  if (!targetBldg) return false;
+  const schedule = getTeacherSchedule(teacherId, dayOfWeek);
+  for (const p of [period - 1, period + 1]) {
+    if (p < 1 || p > 10) continue;
+    if (schedule[p]) {
+      const parsed = parseCellContent(schedule[p]);
+      if (parsed) {
+        const bldg = getClassBuilding(parsed.class_info);
+        if (bldg === targetBldg) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function getRecordsForDate(date) {
@@ -662,6 +785,9 @@ function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName, classI
   teachers.forEach(t => {
     if (t.full_code === absentTeacherName) return;
 
+    // Skip blacked-out teachers
+    if (isTeacherBlackedOut(t.full_code, date)) return;
+
     const schedule = getTeacherSchedule(t.id, dayOfWeek);
     const busyPeriods = [];
     for (let p = 1; p <= 10; p++) {
@@ -724,14 +850,18 @@ function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName, classI
       consecutive_warning: consecutiveWarning,
       consecutiveDayWarning: consecutiveDayWarning,
       isVolunteer: isVolunteer,
-      isIntern: false
+      isIntern: false,
+      isOnDuty: isOnDuty(t.full_code, date, period),
+      sameBuilding: classInfo ? isSameBuilding(t.id, dayOfWeek, period, classInfo) : false
     });
   });
 
-  // Sort: volunteers for this class first, then normal priority
+  // Sort: duty > volunteer > same-building > normal priority
   const tagOrder = { normal: 0, early: 1, late: 1 };
   candidates.sort((a, b) =>
+    ((b.isOnDuty ? 1 : 0) - (a.isOnDuty ? 1 : 0)) ||
     ((b.isVolunteer ? 1 : 0) - (a.isVolunteer ? 1 : 0)) ||
+    ((b.sameBuilding ? 1 : 0) - (a.sameBuilding ? 1 : 0)) ||
     (tagOrder[a.tag] - tagOrder[b.tag]) ||
     (a.consecutiveDayWarning - b.consecutiveDayWarning) ||
     (a.consecutive_warning - b.consecutive_warning) ||
@@ -786,6 +916,13 @@ function showPage(name) {
     renderPeriodTimesEditor();
     updateTimetableInfo();
     renderSavedInternList();
+    setupBlackoutSearch();
+    renderBlackoutList();
+    loadBuildingsFromLocal();
+  }
+  if (name === 'arrange') {
+    setupDutySearch();
+    renderDutyList();
   }
 }
 
@@ -813,6 +950,7 @@ document.getElementById('dateInput').addEventListener('change', function() {
   loadTodaySummary();
   resetAll();
   loadActiveInterns();
+  loadDutiesForToday();
 });
 
 function loadActiveInterns() {
@@ -846,6 +984,9 @@ async function loadActiveLeavesForDate() {
       }
     }
 
+    let periodAssignments = {};
+    try { if (leave.period_assignments) periodAssignments = JSON.parse(leave.period_assignments); } catch(e) {}
+
     absentList.push({
       id: teacher.id,
       full_code: teacher.full_code,
@@ -853,7 +994,8 @@ async function loadActiveLeavesForDate() {
       selectedPeriods: classes.map(c => c.period),
       leaveType: leave.leave_type,
       leaveId: leave.id,
-      longTermSub: leave.long_term_sub || ''
+      longTermSub: leave.long_term_sub || '',
+      periodAssignments: periodAssignments
     });
   });
   renderAbsentList();
@@ -1111,12 +1253,43 @@ async function doAutoArrange() {
   // First pass: determine all assignments locally
   const results = [];
   const toSave = []; // records to batch-save to Google Sheets
-  for (const task of tasks) {
+  // Sort tasks: junior classes first, senior classes last (so senior self-study happens last)
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const aSenior = isSeniorClass(a.class_info) ? 1 : 0;
+    const bSenior = isSeniorClass(b.class_info) ? 1 : 0;
+    return aSenior - bSenior || a.period - b.period;
+  });
+  for (const task of sortedTasks) {
+    // Check for pre-assigned long-term substitute
+    const absent = absentList.find(a => a.id === task.teacherId);
+    let preAssigned = null;
+    if (absent && absent.periodAssignments) {
+      const key = `${dow}-${task.period}`;
+      if (absent.periodAssignments[key]) preAssigned = absent.periodAssignments[key];
+    }
+    if (!preAssigned && absent && absent.longTermSub) preAssigned = absent.longTermSub;
+
+    if (preAssigned) {
+      const tempRecord = {
+        id: 'temp_' + task.teacherId + '_' + task.period,
+        date: dateStr,
+        absent_teacher: task.teacherName,
+        substitute_teacher: preAssigned,
+        period: String(task.period),
+        original_class: task.class_info,
+        original_subject: task.subject,
+        leave_type: 'long_term'
+      };
+      cachedRecords.push(tempRecord);
+      toSave.push(tempRecord);
+      results.push({ ...task, success: true, substitute_name: preAssigned, total_subs: getTotalSubCount(preAssigned), tag: 'long_term', consecutive: 0, consecutive_warning: false, isLongTerm: true });
+      continue;
+    }
+
     const { regular, interns } = recommendAll(dateStr, dow, task.period, task.teacherName, task.class_info);
     const allCandidates = [...regular, ...interns];
     if (allCandidates.length > 0) {
       const best = allCandidates[0];
-      // Add to local cache immediately so next recommendation reflects it
       const tempRecord = {
         id: 'temp_' + task.teacherId + '_' + task.period,
         date: dateStr,
@@ -1128,7 +1301,7 @@ async function doAutoArrange() {
       };
       cachedRecords.push(tempRecord);
       toSave.push(tempRecord);
-      results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning, consecutiveDayWarning: best.consecutiveDayWarning, isVolunteer: best.isVolunteer, isIntern: best.isIntern });
+      results.push({ ...task, success: true, substitute_name: best.full_code, total_subs: best.total_subs, tag: best.tag, consecutive: best.consecutive, consecutive_warning: best.consecutive_warning, consecutiveDayWarning: best.consecutiveDayWarning, isVolunteer: best.isVolunteer, isIntern: best.isIntern, isOnDuty: best.isOnDuty, sameBuilding: best.sameBuilding });
     } else {
       // No teacher available - auto-assign self-study
       const selfStudyRecord = {
@@ -1142,7 +1315,7 @@ async function doAutoArrange() {
       };
       cachedRecords.push(selfStudyRecord);
       toSave.push(selfStudyRecord);
-      results.push({ ...task, success: true, substitute_name: '自习课', total_subs: 0, tag: 'self_study', consecutive: 0, consecutive_warning: false, isSelfStudy: true });
+      results.push({ ...task, success: true, substitute_name: '自习课', total_subs: 0, tag: 'self_study', consecutive: 0, consecutive_warning: false, isSelfStudy: true, isSenior: isSeniorClass(task.class_info) });
     }
   }
 
@@ -1156,7 +1329,8 @@ async function doAutoArrange() {
           substitute_teacher: r.substitute_teacher,
           period: r.period,
           original_class: r.original_class,
-          original_subject: r.original_subject
+          original_subject: r.original_subject,
+          leave_type: r.leave_type || ''
         }))
       });
       // Update temp IDs with real IDs
@@ -1186,10 +1360,15 @@ function showAutoResults(results, tasks) {
 
   const successCount = results.filter(r => r.success).length;
   const failCount = results.filter(r => !r.success).length;
+  const selfStudyCount = results.filter(r => r.isSelfStudy).length;
+  const seniorSelfCount = results.filter(r => r.isSelfStudy && r.isSenior).length;
   panel.innerHTML += `
     <div class="alert ${failCount === 0 ? 'alert-success' : 'alert-warning'} d-flex align-items-center">
       <i class="bi ${failCount === 0 ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'} me-2" style="font-size:1.3rem;"></i>
-      <div>自动安排完成：<strong>${successCount}</strong> 节已安排${failCount > 0 ? `，<strong class="text-danger">${failCount}</strong> 节未能安排` : ''}</div>
+      <div>
+        自动安排完成：<strong>${successCount}</strong> 节已安排${failCount > 0 ? `，<strong class="text-danger">${failCount}</strong> 节未能安排` : ''}
+        ${selfStudyCount > 0 ? `<br><small class="text-muted">其中 ${seniorSelfCount} 节高中自习，${selfStudyCount - seniorSelfCount} 节初中自习</small>` : ''}
+      </div>
     </div>
   `;
 
@@ -1197,9 +1376,16 @@ function showAutoResults(results, tasks) {
     const cardId = `auto_${r.teacherId}_${r.period}`;
     if (r.success) {
       let badges = '';
+      if (r.isOnDuty) badges += ' <span class="badge" style="background:#ff6b35;color:white"><i class="bi bi-bullseye"></i> 义务代课</span>';
       if (r.isVolunteer) badges += ' <span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> 自愿</span>';
+      if (r.sameBuilding) badges += ' <span class="badge bg-info"><i class="bi bi-building"></i> 同楼</span>';
       if (r.isIntern) badges += ' <span class="badge bg-info"><i class="bi bi-mortarboard"></i> 实习</span>';
-      if (r.isSelfStudy) badges += ' <span class="badge bg-secondary"><i class="bi bi-book"></i> 自习</span>';
+      if (r.isLongTerm) badges += ' <span class="badge bg-danger"><i class="bi bi-calendar-x"></i> 长期代课</span>';
+      if (r.isSelfStudy) {
+        badges += r.isSenior
+          ? ' <span class="badge bg-dark"><i class="bi bi-book"></i> 高中自习</span>'
+          : ' <span class="badge bg-secondary"><i class="bi bi-book"></i> 初中自习</span>';
+      }
       if (r.tag === 'early') badges += ' <span class="badge bg-info text-dark">需提前上班</span>';
       if (r.tag === 'late') badges += ' <span class="badge bg-info text-dark">需延迟下班</span>';
       if (r.consecutive_warning) badges += ` <span class="badge bg-danger">连续${r.consecutive}节</span>`;
@@ -1299,7 +1485,9 @@ function buildCandidateTable(candidates, absentTeacherName, period, classInfo, s
     }
 
     let statusHtml = '';
+    if (c.isOnDuty) statusHtml += '<span class="badge" style="background:#ff6b35;color:white"><i class="bi bi-bullseye"></i> 义务代课</span> ';
     if (c.isVolunteer) statusHtml += '<span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> 自愿</span> ';
+    if (c.sameBuilding) statusHtml += '<span class="badge bg-info"><i class="bi bi-building"></i> 同楼</span> ';
     statusHtml += TAG_LABELS[c.tag] || '';
     if (c.consecutive_warning) statusHtml += ` <span class="badge bg-danger">连续${c.consecutive}节</span>`;
     if (c.consecutiveDayWarning) statusHtml += ' <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> 连续两天</span>';
@@ -1912,6 +2100,7 @@ async function submitLeave() {
 
   try {
     statusEl.innerHTML = '<div class="alert alert-info py-1"><span class="spinner-border spinner-border-sm"></span> 提交中...</div>';
+    const periodAssignJson = leaveType === 'long_term' ? JSON.stringify(longTermPeriodAssignments) : '';
     const resp = await gsApi({
       action: 'add_leave',
       teacher_name: teacherName,
@@ -1919,7 +2108,8 @@ async function submitLeave() {
       start_date: startDate,
       end_date: endDate,
       reason: reason,
-      long_term_sub: leaveType === 'long_term' ? longTermSub : ''
+      long_term_sub: leaveType === 'long_term' ? longTermSub : '',
+      period_assignments: periodAssignJson
     });
 
     if (resp.error) throw new Error(resp.error);
@@ -1934,7 +2124,8 @@ async function submitLeave() {
       reason: reason,
       long_term_sub: leaveType === 'long_term' ? longTermSub : '',
       status: 'active',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      period_assignments: periodAssignJson
     });
 
     statusEl.innerHTML = '<div class="alert alert-success py-1"><i class="bi bi-check-circle"></i> 请假登记成功！</div>';
@@ -1944,10 +2135,73 @@ async function submitLeave() {
     document.getElementById('leaveEndDate').value = '';
     document.getElementById('leaveReason').value = '';
     document.getElementById('longTermSubSearch').value = '';
+    longTermPeriodAssignments = {};
+    const matrix = document.getElementById('periodAssignmentMatrix');
+    if (matrix) { matrix.innerHTML = ''; matrix.classList.add('d-none'); }
     loadLeavesList();
   } catch(e) {
     statusEl.innerHTML = `<div class="alert alert-danger py-1">提交失败: ${e.message}</div>`;
   }
+}
+
+// Long-term period-by-period assignment
+let longTermPeriodAssignments = {}; // key: "dow-period" -> teacher name
+
+function showPeriodAssignmentMatrix() {
+  const teacher = document.getElementById('leaveTeacherSearch').value.trim();
+  if (!teacher) { alert('请先选择请假老师'); return; }
+  const foundTeacher = teachers.find(t => t.full_code === teacher);
+  if (!foundTeacher) { alert('找不到该老师'); return; }
+
+  const matrix = document.getElementById('periodAssignmentMatrix');
+  const dayNames = ['', '周一', '周二', '周三', '周四', '周五'];
+  let html = '<div style="overflow-x:auto"><table class="table table-sm table-bordered" style="font-size:11px"><thead><tr><th>节</th>';
+  for (let d = 1; d <= 5; d++) html += `<th>${dayNames[d]}</th>`;
+  html += '</tr></thead><tbody>';
+  for (let p = 1; p <= 10; p++) {
+    html += `<tr><td><strong>${p}</strong></td>`;
+    for (let d = 1; d <= 5; d++) {
+      const sched = getTeacherSchedule(foundTeacher.id, d);
+      if (sched[p]) {
+        const parsed = parseCellContent(sched[p]);
+        const key = `${d}-${p}`;
+        html += `<td>
+          <div class="text-muted small">${parsed.class_info}/${parsed.subject}</div>
+          <input type="text" class="form-control form-control-sm ltp-input" data-key="${key}" placeholder="代课老师" value="${longTermPeriodAssignments[key] || ''}" list="teachersListLt">
+        </td>`;
+      } else {
+        html += '<td class="text-muted text-center"><small>-</small></td>';
+      }
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div><datalist id="teachersListLt">' +
+    teachers.map(t => `<option value="${t.full_code}">`).join('') +
+    '</datalist>';
+  matrix.innerHTML = html;
+  matrix.classList.remove('d-none');
+  matrix.querySelectorAll('input.ltp-input').forEach(inp => {
+    inp.addEventListener('change', function() {
+      const v = this.value.trim();
+      if (v) longTermPeriodAssignments[this.dataset.key] = v;
+      else delete longTermPeriodAssignments[this.dataset.key];
+    });
+  });
+}
+
+function fillAllLongTermPeriods() {
+  const sub = document.getElementById('longTermSubSearch').value.trim();
+  if (!sub) { alert('请先输入代课老师名字'); return; }
+  const matrix = document.getElementById('periodAssignmentMatrix');
+  const inputs = matrix.querySelectorAll('input.ltp-input');
+  if (inputs.length === 0) {
+    alert('请先点击"按节次分配"打开课表');
+    return;
+  }
+  inputs.forEach(inp => {
+    inp.value = sub;
+    longTermPeriodAssignments[inp.dataset.key] = sub;
+  });
 }
 
 async function loadLeavesList() {
@@ -2033,6 +2287,191 @@ function exportLeaves() {
   XLSX.writeFile(wb, '请假记录.xlsx');
 }
 
+// ============================================================
+// BLACKOUT MANAGEMENT
+// ============================================================
+let blackoutSearchTimeout;
+function setupBlackoutSearch() {
+  const el = document.getElementById('blackoutTeacher');
+  if (!el || el._setup) return;
+  el._setup = true;
+  el.addEventListener('input', function() {
+    clearTimeout(blackoutSearchTimeout);
+    const q = this.value.trim();
+    const dd = document.getElementById('blackoutTeacherDropdown');
+    if (q.length < 1) { dd.classList.add('d-none'); return; }
+    blackoutSearchTimeout = setTimeout(() => {
+      const results = searchTeachers(q).slice(0, 10);
+      if (results.length === 0) { dd.classList.add('d-none'); return; }
+      dd.innerHTML = results.map(t =>
+        `<div class="search-dropdown-item" onclick="document.getElementById('blackoutTeacher').value='${esc(t.full_code)}';document.getElementById('blackoutTeacherDropdown').classList.add('d-none');">${t.full_code}</div>`
+      ).join('');
+      dd.classList.remove('d-none');
+    }, 100);
+  });
+}
+
+async function addBlackoutRecord() {
+  const teacher = document.getElementById('blackoutTeacher').value.trim();
+  const start = document.getElementById('blackoutStart').value;
+  const end = document.getElementById('blackoutEnd').value;
+  const reason = document.getElementById('blackoutReason').value.trim();
+  if (!teacher || !start || !end) { alert('请填写完整信息'); return; }
+  if (start > end) { alert('开始日期不能晚于结束日期'); return; }
+  try {
+    const resp = await gsApi({ action: 'add_blackout', teacher_name: teacher, start_date: start, end_date: end, reason: reason });
+    if (resp.error) throw new Error(resp.error);
+    cachedBlackouts.push({ id: resp.id, teacher_name: teacher, start_date: start, end_date: end, reason: reason });
+    document.getElementById('blackoutTeacher').value = '';
+    document.getElementById('blackoutStart').value = '';
+    document.getElementById('blackoutEnd').value = '';
+    document.getElementById('blackoutReason').value = '';
+    renderBlackoutList();
+  } catch(e) { alert('失败: ' + e.message); }
+}
+
+async function removeBlackout(id) {
+  if (!confirm('确定删除？')) return;
+  try {
+    await gsApi({ action: 'delete_blackout', id: id });
+    cachedBlackouts = cachedBlackouts.filter(b => b.id !== id);
+    renderBlackoutList();
+  } catch(e) { alert('失败: ' + e.message); }
+}
+
+function renderBlackoutList() {
+  const el = document.getElementById('blackoutList');
+  if (!el) return;
+  if (cachedBlackouts.length === 0) { el.innerHTML = '<small class="text-muted">暂无记录</small>'; return; }
+  const today = new Date().toISOString().slice(0, 10);
+  el.innerHTML = '<div style="max-height:250px;overflow-y:auto"><table class="table table-sm"><tbody>' +
+    cachedBlackouts.slice().sort((a,b) => (b.start_date||'').localeCompare(a.start_date||'')).map(b => {
+      const active = today >= b.start_date && today <= b.end_date;
+      return `<tr><td>${b.teacher_name}${active ? ' <span class="badge bg-danger">进行中</span>' : ''}</td>
+        <td><small>${b.start_date} ~ ${b.end_date}</small></td>
+        <td><small class="text-muted">${b.reason || ''}</small></td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="removeBlackout('${b.id}')"><i class="bi bi-x"></i></button></td></tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+// ============================================================
+// DUTY MANAGEMENT (today)
+// ============================================================
+let dutySearchTimeout;
+function setupDutySearch() {
+  const el = document.getElementById('dutyTeacher');
+  if (!el || el._setup) return;
+  el._setup = true;
+  el.addEventListener('input', function() {
+    clearTimeout(dutySearchTimeout);
+    const q = this.value.trim();
+    const dd = document.getElementById('dutyTeacherDropdown');
+    if (q.length < 1) { dd.classList.add('d-none'); return; }
+    dutySearchTimeout = setTimeout(() => {
+      const results = searchTeachers(q).slice(0, 10);
+      if (results.length === 0) { dd.classList.add('d-none'); return; }
+      dd.innerHTML = results.map(t =>
+        `<div class="search-dropdown-item" onclick="document.getElementById('dutyTeacher').value='${esc(t.full_code)}';document.getElementById('dutyTeacherDropdown').classList.add('d-none');">${t.full_code}</div>`
+      ).join('');
+      dd.classList.remove('d-none');
+    }, 100);
+  });
+}
+
+async function addDutyRecord() {
+  const dateStr = document.getElementById('dateInput').value;
+  const teacher = document.getElementById('dutyTeacher').value.trim();
+  const periodsIn = document.getElementById('dutyPeriods').value.trim();
+  if (!teacher || !periodsIn) { alert('请输入老师和节次'); return; }
+  const ps = periodsIn.split(',').map(p => parseInt(p.trim())).filter(p => p >= 1 && p <= 10);
+  if (ps.length === 0) { alert('节次格式错误，如：3,5'); return; }
+  const periodsStr = ps.join(',');
+  try {
+    const resp = await gsApi({ action: 'add_duty', date: dateStr, teacher_name: teacher, periods: periodsStr });
+    if (resp.error) throw new Error(resp.error);
+    cachedDuties.push({ id: resp.id, date: dateStr, teacher_name: teacher, periods: periodsStr });
+    document.getElementById('dutyTeacher').value = '';
+    document.getElementById('dutyPeriods').value = '';
+    renderDutyList();
+  } catch(e) { alert('失败: ' + e.message); }
+}
+
+async function removeDuty(id) {
+  try {
+    await gsApi({ action: 'delete_duty', id: id });
+    cachedDuties = cachedDuties.filter(d => d.id !== id);
+    renderDutyList();
+  } catch(e) { alert('失败: ' + e.message); }
+}
+
+function renderDutyList() {
+  const el = document.getElementById('dutyList');
+  if (!el) return;
+  const dateStr = document.getElementById('dateInput').value;
+  const todayDuties = getDutiesForDate(dateStr);
+  el.innerHTML = todayDuties.map(d =>
+    `<span class="badge" style="background:#ff6b35;color:white"><i class="bi bi-bullseye"></i> ${d.teacher_name} 第${d.periods}节
+      <button class="btn-close btn-close-sm ms-1" style="font-size:0.6em;filter:invert(1);" onclick="removeDuty('${d.id}')"></button>
+    </span>`
+  ).join('');
+}
+
+async function loadDutiesForToday() {
+  setupDutySearch();
+  await fetchAllDuties();
+  renderDutyList();
+}
+
+// ============================================================
+// BUILDINGS (class -> building mapping)
+// ============================================================
+async function loadBuildingsFromUrl() {
+  const url = document.getElementById('buildingsUrl').value.trim();
+  const statusEl = document.getElementById('buildingsStatus');
+  if (!url) { statusEl.innerHTML = '<div class="alert alert-warning py-1">请输入 URL</div>'; return; }
+  try {
+    statusEl.innerHTML = '<div class="alert alert-info py-1"><span class="spinner-border spinner-border-sm"></span> 加载中...</div>';
+    const resp = await fetch(url);
+    const text = await resp.text();
+    const rows = text.split('\n').map(l => l.split(','));
+    const mapping = {};
+    rows.forEach(r => {
+      if (r.length >= 2) {
+        const cls = r[0].trim().replace(/"/g, '');
+        const bldg = r[1].trim().replace(/"/g, '');
+        if (cls && bldg && cls !== '班级') mapping[cls] = bldg;
+      }
+    });
+    classBuildings = mapping;
+    localStorage.setItem(LS_BUILDINGS, JSON.stringify({ url: url, mapping: mapping }));
+    statusEl.innerHTML = `<div class="alert alert-success py-1">已加载 ${Object.keys(mapping).length} 个班级的楼宇信息</div>`;
+  } catch(e) {
+    statusEl.innerHTML = `<div class="alert alert-danger py-1">加载失败: ${e.message}</div>`;
+  }
+}
+
+function clearBuildings() {
+  if (!confirm('清空楼宇对照表？')) return;
+  classBuildings = {};
+  localStorage.removeItem(LS_BUILDINGS);
+  const el = document.getElementById('buildingsUrl');
+  if (el) el.value = '';
+  const st = document.getElementById('buildingsStatus');
+  if (st) st.innerHTML = '<div class="alert alert-secondary py-1">已清空</div>';
+}
+
+function loadBuildingsFromLocal() {
+  try {
+    const raw = localStorage.getItem(LS_BUILDINGS);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      if (obj.mapping) classBuildings = obj.mapping;
+      const el = document.getElementById('buildingsUrl');
+      if (el && obj.url && !el.value) el.value = obj.url;
+    }
+  } catch(e) {}
+}
+
 function exportLocalData() {
   const data = {
     teachers: teachers,
@@ -2114,12 +2553,16 @@ async function init() {
   try {
     await fetchAllRecords(true);
     await fetchAllLeaves(true);
+    await fetchAllBlackouts(true);
+    await fetchAllDuties(true);
+    loadBuildingsFromLocal();
   } catch(e) {
     console.warn('Failed to fetch records', e);
   }
   hideLoading();
   loadTodaySummary();
   loadActiveInterns();
+  loadDutiesForToday();
 }
 
 function showLoading(text) {
