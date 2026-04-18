@@ -873,7 +873,7 @@ function recommendSubstitutes(date, dayOfWeek, period, absentTeacherName, classI
     a.full_code.localeCompare(b.full_code)
   );
 
-  return candidates.slice(0, 50);
+  return candidates; // Return all free teachers
 }
 
 // Recommend including interns and self-study option
