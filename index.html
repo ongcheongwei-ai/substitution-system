@@ -1290,7 +1290,10 @@ async function doAutoArrange() {
     }
 
     const { regular, interns } = recommendAll(dateStr, dow, task.period, task.teacherName, task.class_info);
-    const allCandidates = [...regular, ...interns];
+    // Prioritize interns (must do 3 periods/day) unless duty/volunteer regular candidate exists
+    const topRegular = regular[0];
+    const hasSpecialRegular = topRegular && (topRegular.isOnDuty || topRegular.isVolunteer);
+    const allCandidates = hasSpecialRegular ? [...regular, ...interns] : [...interns, ...regular];
     if (allCandidates.length > 0) {
       const best = allCandidates[0];
       const tempRecord = {
