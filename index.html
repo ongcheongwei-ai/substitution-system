@@ -389,18 +389,22 @@ body { background: #f5f6fa; font-size: 14px; }
       </div>
 
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-whatsapp"></i> 老师联络号码</div>
+        <div class="card-header"><i class="bi bi-whatsapp"></i> 老师联络号码 <span id="contactCount" class="badge bg-secondary ms-1">0</span></div>
         <div class="card-body">
+          <div class="alert alert-info py-2 small mb-2">
+            <i class="bi bi-info-circle"></i> <strong>批量添加</strong>：直接在 Google Sheet 的 <code>Contacts</code> tab 里粘贴老师名字和电话号码即可，<code>id</code> 和 <code>created_at</code> 留空（系统会自动补全）。
+          </div>
           <div class="mb-2 position-relative">
-            <input type="text" id="contactTeacher" class="form-control form-control-sm" placeholder="输入老师名字搜索..." autocomplete="off">
+            <input type="text" id="contactTeacher" class="form-control form-control-sm" placeholder="单个添加 - 输入老师名字搜索..." autocomplete="off">
             <div id="contactTeacherDropdown" class="search-dropdown d-none"></div>
           </div>
           <div class="mb-2">
             <input type="text" id="contactPhone" class="form-control form-control-sm" placeholder="电话号码（如 0123456789 或 60123456789）">
           </div>
           <button class="btn btn-sm btn-success" onclick="addContact()"><i class="bi bi-plus"></i> 添加</button>
-          <small class="text-muted ms-2">已有号码的老师会覆盖</small>
-          <div id="contactList" class="mt-2"></div>
+          <button class="btn btn-sm btn-outline-secondary ms-2" onclick="toggleContactList()"><i class="bi bi-list"></i> <span id="contactToggleLabel">查看全部</span></button>
+          <button class="btn btn-sm btn-outline-info ms-1" onclick="refreshContactsFromSheet()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
+          <div id="contactList" class="mt-2 d-none"></div>
         </div>
       </div>
 
@@ -2812,15 +2816,40 @@ async function removeContact(id) {
 
 function renderContactList() {
   const el = document.getElementById('contactList');
+  const countEl = document.getElementById('contactCount');
+  if (countEl) countEl.textContent = cachedContacts.length;
   if (!el) return;
-  if (cachedContacts.length === 0) { el.innerHTML = '<small class="text-muted">暂无记录</small>'; return; }
+  if (cachedContacts.length === 0) { el.innerHTML = '<small class="text-muted">暂无记录 — 请在 Google Sheet 的 Contacts tab 里批量添加</small>'; return; }
   const sorted = cachedContacts.slice().sort((a, b) => (a.teacher_name || '').localeCompare(b.teacher_name || ''));
-  el.innerHTML = '<div style="max-height:300px;overflow-y:auto"><table class="table table-sm table-striped"><tbody>' +
+  el.innerHTML = '<input type="text" id="contactFilter" class="form-control form-control-sm mb-2" placeholder="搜索老师或号码..." oninput="filterContactList(this.value)"><div style="max-height:400px;overflow-y:auto"><table class="table table-sm table-striped mb-0"><tbody id="contactListBody">' +
     sorted.map(c =>
-      `<tr><td>${c.teacher_name}</td>
+      `<tr data-search="${(c.teacher_name || '').toLowerCase()} ${(c.phone || '').toLowerCase()}"><td>${c.teacher_name}</td>
         <td><small>${c.phone}</small></td>
         <td><button class="btn btn-sm btn-outline-danger" onclick="removeContact('${c.id}')"><i class="bi bi-x"></i></button></td></tr>`
     ).join('') + '</tbody></table></div>';
+}
+
+function filterContactList(q) {
+  const lower = (q || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#contactListBody tr');
+  rows.forEach(r => {
+    const s = r.dataset.search || '';
+    r.style.display = (!lower || s.includes(lower)) ? '' : 'none';
+  });
+}
+
+function toggleContactList() {
+  const el = document.getElementById('contactList');
+  const label = document.getElementById('contactToggleLabel');
+  if (!el) return;
+  const isHidden = el.classList.contains('d-none');
+  el.classList.toggle('d-none');
+  if (label) label.textContent = isHidden ? '收起' : '查看全部';
+}
+
+async function refreshContactsFromSheet() {
+  await fetchAllContacts(true);
+  renderContactList();
 }
 
 function exportLocalData() {
