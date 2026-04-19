@@ -34,9 +34,9 @@ body { background: #f5f6fa; font-size: 14px; }
 @media print {
   #slipContainer { display: block !important; }
   #slipContainer ~ * { display: none !important; }
-  .slip-card { page-break-inside: avoid; border: 2px solid #000; padding: 15px; margin-bottom: 15px; font-size: 16px; }
-  .slip-card table { width: 100%; }
-  .slip-card td { padding: 5px 8px; }
+  .slip-card { page-break-inside: avoid; page-break-after: always; border: 2px solid #000; padding: 20px; margin-bottom: 15px; font-size: 14px; }
+  .slip-card:last-child { page-break-after: auto; }
+  .slip-card table td { padding: 3px 5px; }
 }
 </style>
 </head>
@@ -144,6 +144,7 @@ body { background: #f5f6fa; font-size: 14px; }
         <div class="card-header">
           <i class="bi bi-list-check"></i> 今日代课安排总表
           <button class="btn btn-sm btn-outline-secondary float-end no-print" onclick="printDaily()"><i class="bi bi-printer"></i> 打印</button>
+          <button class="btn btn-sm btn-outline-success float-end me-1 no-print" onclick="sendWhatsAppAll()" style="display:none" id="waAllBtn"><i class="bi bi-whatsapp"></i> 群发</button>
           <button class="btn btn-sm btn-outline-primary float-end me-1 no-print" onclick="generateSlip()" style="display:none" id="slipBtn"><i class="bi bi-file-text"></i> 代课单</button>
           <button class="btn btn-sm btn-outline-danger float-end me-1 no-print" id="clearTodayBtn" onclick="clearTodayAll()" style="display:none"><i class="bi bi-trash"></i> 一键清空</button>
         </div>
@@ -388,6 +389,22 @@ body { background: #f5f6fa; font-size: 14px; }
       </div>
 
       <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-whatsapp"></i> 老师联络号码</div>
+        <div class="card-body">
+          <div class="mb-2 position-relative">
+            <input type="text" id="contactTeacher" class="form-control form-control-sm" placeholder="输入老师名字搜索..." autocomplete="off">
+            <div id="contactTeacherDropdown" class="search-dropdown d-none"></div>
+          </div>
+          <div class="mb-2">
+            <input type="text" id="contactPhone" class="form-control form-control-sm" placeholder="电话号码（如 0123456789 或 60123456789）">
+          </div>
+          <button class="btn btn-sm btn-success" onclick="addContact()"><i class="bi bi-plus"></i> 添加</button>
+          <small class="text-muted ms-2">已有号码的老师会覆盖</small>
+          <div id="contactList" class="mt-2"></div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
         <div class="card-header"><i class="bi bi-building"></i> 班级楼宇对照表 <small class="text-muted">(同楼优先推荐)</small></div>
         <div class="card-body">
           <small class="text-muted d-block mb-2">Google Sheets CSV 公开链接（A列班级，B列楼宇）</small>
@@ -454,6 +471,8 @@ let cachedBlackoutsLoaded = false;
 let cachedDuties = [];
 let cachedDutiesLoaded = false;
 let classBuildings = {}; // { classInfo: buildingName }
+let cachedContacts = [];
+let cachedContactsLoaded = false;
 
 // Records cache for the current session (fetched from Google Sheets)
 let cachedRecords = [];       // All records from Google Sheets
@@ -567,6 +586,32 @@ function isOnDuty(teacherName, date, period) {
     const periods = String(d.periods || '').split(',').map(p => parseInt(p.trim())).filter(p => p > 0);
     return periods.includes(period);
   });
+}
+
+async function fetchAllContacts(force) {
+  if (cachedContactsLoaded && !force) return cachedContacts;
+  try {
+    const data = await gsApi({ action: 'get_contacts' });
+    cachedContacts = data.contacts || [];
+    cachedContactsLoaded = true;
+  } catch (e) { console.warn('contacts failed', e); cachedContacts = []; }
+  return cachedContacts;
+}
+
+function getContactPhone(teacherName) {
+  const c = cachedContacts.find(c => c.teacher_name === teacherName);
+  return c ? c.phone : '';
+}
+
+// Format phone for WhatsApp: strip non-digits, ensure country code
+function normalizePhone(phone) {
+  let p = String(phone || '').replace(/\D/g, '');
+  if (!p) return '';
+  // If starts with 0 (Malaysia local), strip it and add 60
+  if (p.startsWith('0')) p = '60' + p.slice(1);
+  // If no country code and starts with 1 (Malaysia mobile), add 60
+  else if (p.length >= 9 && p.length <= 10 && p.startsWith('1')) p = '60' + p;
+  return p;
 }
 
 function isSeniorClass(classInfo) {
@@ -921,6 +966,8 @@ function showPage(name) {
     renderSavedInternList();
     setupBlackoutSearch();
     renderBlackoutList();
+    setupContactSearch();
+    fetchAllContacts().then(() => renderContactList());
     loadBuildingsFromLocal();
   }
   if (name === 'arrange') {
@@ -1730,29 +1777,101 @@ async function loadTodaySummary() {
 
   const clearBtn = document.getElementById('clearTodayBtn');
   const slipBtn = document.getElementById('slipBtn');
+  const waAllBtn = document.getElementById('waAllBtn');
   if (rows.length === 0) {
     tbody.innerHTML = '';
     noRec.classList.remove('d-none');
     if (clearBtn) clearBtn.style.display = 'none';
     if (slipBtn) slipBtn.style.display = 'none';
+    if (waAllBtn) waAllBtn.style.display = 'none';
     return;
   }
 
   noRec.classList.add('d-none');
   if (clearBtn) clearBtn.style.display = '';
   if (slipBtn) slipBtn.style.display = '';
+  if (waAllBtn) waAllBtn.style.display = '';
   // Sort by period
   rows.sort((a, b) => parseInt(a.period) - parseInt(b.period));
 
-  tbody.innerHTML = rows.map(r => `
-    <tr>
+  tbody.innerHTML = rows.map(r => {
+    const phone = getContactPhone(r.substitute_teacher);
+    const waBtn = (phone && r.substitute_teacher !== '自习课')
+      ? `<button class="btn btn-sm btn-outline-success me-1" onclick="sendWhatsApp('${esc(r.id)}')" title="发送 WhatsApp"><i class="bi bi-whatsapp"></i></button>`
+      : '';
+    return `<tr>
       <td><span class="period-badge period-busy">${r.period}</span></td>
       <td>${r.original_class || ''} ${r.original_subject || ''}</td>
       <td>${r.absent_teacher}</td>
       <td><strong>${r.substitute_teacher}</strong></td>
-      <td class="no-print"><button class="btn btn-sm btn-outline-danger" onclick="deleteSub('${r.id}')"><i class="bi bi-x"></i></button></td>
-    </tr>
-  `).join('');
+      <td class="no-print">${waBtn}<button class="btn btn-sm btn-outline-danger" onclick="deleteSub('${r.id}')"><i class="bi bi-x"></i></button></td>
+    </tr>`;
+  }).join('');
+}
+
+// WhatsApp — open wa.me with prefilled message
+function sendWhatsApp(recordId) {
+  const r = cachedRecords.find(rec => rec.id === recordId);
+  if (!r) return;
+  const phone = getContactPhone(r.substitute_teacher);
+  if (!phone) { alert('该老师未登记联络号码，请到设置页添加'); return; }
+  const normalized = normalizePhone(phone);
+  if (!normalized) { alert('电话号码格式错误'); return; }
+
+  const d = new Date(r.date + 'T00:00:00');
+  const dayName = DAY_NAMES[d.getDay()] || '';
+  const timeStr = periodTimes[parseInt(r.period)] || '';
+  const classCode = r.original_class || '';
+  const subject = r.original_subject || '';
+
+  const msg = `${r.substitute_teacher}老师您好，请您协助代课。\n\n日期：${r.date}（${dayName}）\n请假老师：${r.absent_teacher}\n代课班级：${classCode}\n第${r.period}节\n时间：${timeStr}\n科目：${subject}\n\n谢谢！`;
+
+  const url = `https://wa.me/${normalized}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+}
+
+// Send to all substitute teachers for today
+function sendWhatsAppAll() {
+  const dateStr = document.getElementById('dateInput').value;
+  const rows = getRecordsForDate(dateStr).filter(r => r.substitute_teacher !== '自习课');
+  if (rows.length === 0) { alert('今日暂无代课安排'); return; }
+
+  // Group by substitute teacher
+  const grouped = {};
+  rows.forEach(r => {
+    if (!grouped[r.substitute_teacher]) grouped[r.substitute_teacher] = [];
+    grouped[r.substitute_teacher].push(r);
+  });
+
+  const missing = [];
+  const toSend = [];
+  Object.entries(grouped).forEach(([subName, records]) => {
+    const phone = getContactPhone(subName);
+    if (!phone) { missing.push(subName); return; }
+    const normalized = normalizePhone(phone);
+    if (!normalized) { missing.push(subName); return; }
+    toSend.push({ subName, phone: normalized, records });
+  });
+
+  if (missing.length > 0) {
+    if (!confirm(`以下老师未登记号码，将跳过：\n${missing.join('、')}\n\n继续发送给其他 ${toSend.length} 位老师？`)) return;
+  }
+
+  if (toSend.length === 0) return;
+  if (!confirm(`即将逐一打开 ${toSend.length} 个 WhatsApp 窗口，每次发送后需手动关闭。是否继续？`)) return;
+
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayName = DAY_NAMES[d.getDay()] || '';
+
+  toSend.forEach((item, idx) => {
+    const periodsText = item.records.sort((a,b)=>parseInt(a.period)-parseInt(b.period)).map(r => {
+      const timeStr = periodTimes[parseInt(r.period)] || '';
+      return `第${r.period}节 ${timeStr}｜${r.original_class || ''} ${r.original_subject || ''}｜请假：${r.absent_teacher}`;
+    }).join('\n');
+    const msg = `${item.subName}老师您好，请您协助代课。\n\n日期：${dateStr}（${dayName}）\n\n${periodsText}\n\n谢谢！`;
+    const url = `https://wa.me/${item.phone}?text=${encodeURIComponent(msg)}`;
+    setTimeout(() => window.open(url, '_blank'), idx * 500);
+  });
 }
 
 async function deleteSub(id) {
@@ -2084,34 +2203,114 @@ function getActiveInternsForDate(dateStr) {
 function generateSlip() {
   const dateStr = document.getElementById('dateInput').value;
   const d = new Date(dateStr + 'T00:00:00');
-  const dayName = DAY_NAMES[d.getDay()] || '';
+  const dayNumbers = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const chDays = ['日', '一', '二', '三', '四', '五', '六'];
+  const dayCh = chDays[d.getDay()] || '';
+  // Short date MM/DD
+  const mmdd = `${d.getMonth()+1}/${d.getDate()}`;
+
   const rows = getRecordsForDate(dateStr);
   if (rows.length === 0) { alert('今日暂无代课安排'); return; }
 
   rows.sort((a, b) => parseInt(a.period) - parseInt(b.period));
 
   const container = document.getElementById('slipContainer');
-  let html = `<h2 style="text-align:center;margin-bottom:20px;">代课通知单</h2>
-    <p style="text-align:center;font-size:18px;">日期: ${dateStr} (${dayName})</p>`;
 
+  // Build time row table for reference
+  const timesRow1 = [1,2,3,4,5].map(p => (periodTimes[p] || '').split('-')[0]).join('</td><td style="text-align:center;font-size:10px">');
+  const timesRow2 = [1,2,3,4,5].map(p => (periodTimes[p] || '').split('-')[1] || '').join('</td><td style="text-align:center;font-size:10px">');
+  const timesRow1b = [6,7,8,9,10].map(p => (periodTimes[p] || '').split('-')[0]).join('</td><td style="text-align:center;font-size:10px">');
+  const timesRow2b = [6,7,8,9,10].map(p => (periodTimes[p] || '').split('-')[1] || '').join('</td><td style="text-align:center;font-size:10px">');
+
+  let html = '';
   rows.forEach(r => {
-    const timeStr = periodTimes[parseInt(r.period)] || '';
+    const periodNum = parseInt(r.period);
+    // Highlight the relevant period cell with circle
+    const periodCells = [];
+    for (let p = 1; p <= 10; p++) {
+      const t = periodTimes[p] || '';
+      const [t1, t2] = t.split('-');
+      const isActive = p === periodNum;
+      const style = isActive
+        ? 'text-align:center;font-size:10px;border:2px solid #0000ff;border-radius:50%;font-weight:bold;'
+        : 'text-align:center;font-size:10px;';
+      periodCells.push(`<td style="${style}">${t1 || ''}<br>${t2 || ''}</td>`);
+    }
+
     html += `
       <div class="slip-card">
-        <table>
-          <tr><td colspan="4" style="text-align:center;font-weight:bold;font-size:18px;padding:10px;">代 课 通 知 单</td></tr>
-          <tr><td style="width:25%"><strong>日期:</strong></td><td style="width:25%">${dateStr} (${dayName})</td>
-              <td style="width:25%"><strong>节次:</strong></td><td style="width:25%">第${r.period}节 (${timeStr})</td></tr>
-          <tr><td><strong>缺席老师:</strong></td><td>${r.absent_teacher}</td>
-              <td><strong>代课老师:</strong></td><td><strong>${r.substitute_teacher}</strong></td></tr>
-          <tr><td><strong>原班级:</strong></td><td>${r.original_class || ''}</td>
-              <td><strong>原科目:</strong></td><td>${r.original_subject || ''}</td></tr>
-          <tr><td colspan="4" style="padding-top:20px;">
-            <table style="width:100%"><tr>
-              <td style="width:50%">代课老师签名: ________________</td>
-              <td style="width:50%">教务处: ________________</td>
-            </tr></table>
-          </td></tr>
+        <div style="text-align:center;font-size:18px;font-weight:bold;margin-bottom:12px;">代课通知单 Class Relief Notice</div>
+
+        <div style="font-size:14px;line-height:1.8;margin-bottom:8px;">
+          <span>呈/To Teacher：</span>
+          <span style="display:inline-block;border-bottom:1px solid #000;min-width:200px;text-align:center;font-weight:bold;padding:0 8px;">${r.substitute_teacher}</span>
+          <span>老师，请协助日期/Date：</span>
+          <span style="display:inline-block;border-bottom:1px solid #000;min-width:80px;text-align:center;padding:0 4px;">${mmdd}</span>
+          <span>（星期：</span>
+          <span style="display:inline-block;border-bottom:1px solid #000;min-width:40px;text-align:center;padding:0 4px;">${dayCh}</span>
+          <span>）</span>
+        </div>
+
+        <div style="font-size:14px;line-height:1.8;margin-bottom:8px;">
+          <span>班级/Class：</span>
+          <span style="display:inline-block;border-bottom:1px solid #000;min-width:160px;text-align:center;padding:0 4px;">${r.original_class || ''} ${r.original_subject || ''}</span>
+          <span>第/Period：</span>
+          <span style="display:inline-block;border-bottom:1px solid #000;min-width:40px;text-align:center;font-weight:bold;padding:0 4px;">${r.period}</span>
+          <span>节的代课，谢谢。Thank you for your assistance.</span>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;border:1px solid #000;margin:8px 0;font-size:11px;">
+          <tr>
+            <td style="border:1px solid #000;padding:4px;text-align:center;width:16%;">
+              Monday<br>Tuesday<br>Wednesday<br>Thursday<br>Friday
+            </td>
+            ${periodCells.slice(0, 5).map((cell, i) => cell.replace('<td style=', '<td style="border:1px solid #000;padding:4px;')).join('')}
+          </tr>
+          <tr>
+            <td style="border:1px solid #000;padding:4px;text-align:center;">Period</td>
+            ${[1,2,3,4,5].map(p => `<td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;">${p}</td>`).join('')}
+          </tr>
+          <tr>
+            <td style="border:1px solid #000;padding:4px;text-align:center;">&nbsp;</td>
+            ${[6,7,8,9,10].map(p => {
+              const t = periodTimes[p] || '';
+              const [t1, t2] = t.split('-');
+              const isActive = p === periodNum;
+              const cellStyle = isActive ? 'border:1px solid #000;padding:4px;text-align:center;' : 'border:1px solid #000;padding:4px;text-align:center;';
+              const inner = isActive
+                ? `<div style="display:inline-block;border:2px solid #0000ff;border-radius:50%;padding:2px 8px;">${t1||''}<br>${t2||''}</div>`
+                : `${t1||''}<br>${t2||''}`;
+              return `<td style="${cellStyle}">${inner}</td>`;
+            }).join('')}
+          </tr>
+          <tr>
+            <td style="border:1px solid #000;padding:4px;text-align:center;">Period</td>
+            ${[6,7,8,9,10].map(p => `<td style="border:1px solid #000;padding:4px;text-align:center;font-weight:bold;">${p}</td>`).join('')}
+          </tr>
+        </table>
+
+        <div style="font-size:10px;margin:6px 0;border:1px solid #000;padding:6px;line-height:1.4;">
+          若无法协助代课请写明原因，请教务处顾问校长签名后再交回教务处，感谢配合，谢谢。 If unable to assist with substituting the class, please state the reason clearly, have it signed by the Academic Department Consultant of the Principal, and return it to the Academic Department. Thank you for your cooperation.
+          <div style="margin-top:20px;">顾问校长签名：_______________________________</div>
+        </div>
+
+        <div style="font-size:13px;margin:8px 0;">
+          <span>请假老师 Name：</span>
+          <span style="display:inline-block;border-bottom:1px solid #000;min-width:250px;padding:0 4px;">${r.absent_teacher}</span>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;border:1px solid #000;font-size:11px;">
+          <tr>
+            <td rowspan="2" style="border:1px solid #000;padding:4px;text-align:center;width:12%;">请假原因<br>Reason：</td>
+            <td style="border:1px solid #000;padding:4px;">☐ 病假 Sick</td>
+            <td style="border:1px solid #000;padding:4px;">☐ 公假 Official</td>
+            <td style="border:1px solid #000;padding:4px;">☐ 事假 Personal</td>
+            <td style="border:1px solid #000;padding:4px;">☐ 婚假 Marriage</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="border:1px solid #000;padding:4px;">☐ 产假/陪产假 Maternity/Paternity</td>
+            <td colspan="2" style="border:1px solid #000;padding:4px;">☐ 丧假 Compassionate</td>
+          </tr>
         </table>
       </div>`;
   });
@@ -2557,6 +2756,73 @@ function loadBuildingsFromLocal() {
   } catch(e) {}
 }
 
+// ============================================================
+// CONTACTS MANAGEMENT
+// ============================================================
+let contactSearchTimeout;
+function setupContactSearch() {
+  const el = document.getElementById('contactTeacher');
+  if (!el || el._setup) return;
+  el._setup = true;
+  el.addEventListener('input', function() {
+    clearTimeout(contactSearchTimeout);
+    const q = this.value.trim();
+    const dd = document.getElementById('contactTeacherDropdown');
+    if (q.length < 1) { dd.classList.add('d-none'); return; }
+    contactSearchTimeout = setTimeout(() => {
+      const results = searchTeachers(q).slice(0, 10);
+      if (results.length === 0) { dd.classList.add('d-none'); return; }
+      dd.innerHTML = results.map(t =>
+        `<div class="search-dropdown-item" onclick="document.getElementById('contactTeacher').value='${esc(t.full_code)}';document.getElementById('contactTeacherDropdown').classList.add('d-none');">${t.full_code}</div>`
+      ).join('');
+      dd.classList.remove('d-none');
+    }, 100);
+  });
+}
+
+async function addContact() {
+  const teacher = document.getElementById('contactTeacher').value.trim();
+  const phone = document.getElementById('contactPhone').value.trim();
+  if (!teacher || !phone) { alert('请填写老师名字和电话号码'); return; }
+  // Check for existing
+  const existing = cachedContacts.find(c => c.teacher_name === teacher);
+  try {
+    if (existing) {
+      await gsApi({ action: 'update_contact', id: existing.id, phone: phone });
+      existing.phone = phone;
+    } else {
+      const resp = await gsApi({ action: 'add_contact', teacher_name: teacher, phone: phone });
+      if (resp.error) throw new Error(resp.error);
+      cachedContacts.push({ id: resp.id, teacher_name: teacher, phone: phone });
+    }
+    document.getElementById('contactTeacher').value = '';
+    document.getElementById('contactPhone').value = '';
+    renderContactList();
+  } catch(e) { alert('失败: ' + e.message); }
+}
+
+async function removeContact(id) {
+  if (!confirm('确定删除此联络号码？')) return;
+  try {
+    await gsApi({ action: 'delete_contact', id: id });
+    cachedContacts = cachedContacts.filter(c => c.id !== id);
+    renderContactList();
+  } catch(e) { alert('失败: ' + e.message); }
+}
+
+function renderContactList() {
+  const el = document.getElementById('contactList');
+  if (!el) return;
+  if (cachedContacts.length === 0) { el.innerHTML = '<small class="text-muted">暂无记录</small>'; return; }
+  const sorted = cachedContacts.slice().sort((a, b) => (a.teacher_name || '').localeCompare(b.teacher_name || ''));
+  el.innerHTML = '<div style="max-height:300px;overflow-y:auto"><table class="table table-sm table-striped"><tbody>' +
+    sorted.map(c =>
+      `<tr><td>${c.teacher_name}</td>
+        <td><small>${c.phone}</small></td>
+        <td><button class="btn btn-sm btn-outline-danger" onclick="removeContact('${c.id}')"><i class="bi bi-x"></i></button></td></tr>`
+    ).join('') + '</tbody></table></div>';
+}
+
 function exportLocalData() {
   const data = {
     teachers: teachers,
@@ -2640,6 +2906,7 @@ async function init() {
     await fetchAllLeaves(true);
     await fetchAllBlackouts(true);
     await fetchAllDuties(true);
+    await fetchAllContacts(true);
     loadBuildingsFromLocal();
   } catch(e) {
     console.warn('Failed to fetch records', e);
