@@ -1836,6 +1836,28 @@ async function assignSubstitute(absentTeacherName, period, subTeacherName, class
       body.innerHTML = `<div class="alert alert-success m-3 mb-0"><i class="bi bi-check-circle"></i> 已安排 <strong>${subTeacherName}</strong> 代课</div>`;
     }
 
+    // Check rejection replacement card (reject_<teacherId>_<period>_<timestamp>)
+    const rejectCards = document.querySelectorAll(`[id^="reject_${teacherId}_${period}_"]`);
+    rejectCards.forEach(card => {
+      const header = card.querySelector('.card-header .badge');
+      if (header) {
+        header.className = 'badge bg-success float-end';
+        header.textContent = '已重新安排';
+      }
+      const body = card.querySelector('.card-body');
+      if (body) body.innerHTML = `<div class="alert alert-success m-3 mb-0"><i class="bi bi-check-circle"></i> 已安排 <strong>${subTeacherName}</strong> 代替退课老师</div>`;
+    });
+
+    // Also update the warning banner if visible
+    const panel = document.getElementById('recommendPanels');
+    if (panel && pendingRejectionId) {
+      const banner = panel.querySelector('.alert-warning');
+      if (banner) {
+        banner.className = 'alert alert-success';
+        banner.innerHTML = `<i class="bi bi-check-circle-fill"></i> 已成功安排 <strong>${subTeacherName}</strong> 代替退课老师第${period}节的代课`;
+      }
+    }
+
     // If this is a replacement for a rejected record, update rejection's replaced_by
     if (pendingRejectionId) {
       try {
