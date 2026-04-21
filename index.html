@@ -228,6 +228,20 @@ body { background: #f5f6fa; font-size: 14px; }
       </table>
     </div>
   </div>
+  <div class="card mt-4">
+    <div class="card-header">
+      <i class="bi bi-slash-circle"></i> 退代课记录
+      <button class="btn btn-sm btn-outline-secondary float-end" onclick="refreshRejectionsList()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
+    </div>
+    <div class="card-body">
+      <table class="table table-sm table-striped">
+        <thead><tr><th>日期</th><th>节次</th><th>班级</th><th>缺席老师</th><th>退代课老师</th><th>原因</th><th>替代老师</th></tr></thead>
+        <tbody id="rejectionsBody"></tbody>
+      </table>
+      <div id="noRejections" class="text-center text-muted py-2">暂无退代课记录</div>
+    </div>
+  </div>
+
   <div class="card mt-4 border-primary">
     <div class="card-header bg-primary text-white">
       <i class="bi bi-file-earmark-spreadsheet-fill"></i> 月结算报表 (人力资源处)
@@ -452,6 +466,34 @@ body { background: #f5f6fa; font-size: 14px; }
 <!-- Slip print container (hidden, shown only on print) -->
 <div id="slipContainer"></div>
 
+<!-- Rejection Modal -->
+<div id="rejectionModal" class="no-print" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;justify-content:center;align-items:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;max-width:500px;width:90%;">
+    <h5 class="mb-3"><i class="bi bi-slash-circle text-warning"></i> 老师退代课</h5>
+    <div id="rejectionInfo" class="alert alert-light small mb-3"></div>
+    <div class="mb-2">
+      <label class="form-label fw-bold">退课时间</label>
+      <input type="datetime-local" id="rejectionTime" class="form-control form-control-sm">
+    </div>
+    <div class="mb-3">
+      <label class="form-label fw-bold">退课原因</label>
+      <textarea id="rejectionReason" class="form-control form-control-sm" rows="3" placeholder="例如：临时有事无法代课 / 身体不适 / 需开会"></textarea>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="rejectionPickReplacement" checked>
+      <label class="form-check-label" for="rejectionPickReplacement">
+        确认后立即选择新的代课老师
+      </label>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-warning flex-fill" onclick="confirmRejection()">
+        <i class="bi bi-check-circle"></i> 确认退代课
+      </button>
+      <button class="btn btn-outline-secondary" onclick="closeRejectionModal()">取消</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- container -->
 
 <script>
@@ -492,6 +534,9 @@ let cachedDutiesLoaded = false;
 let classBuildings = {}; // { classInfo: buildingName }
 let cachedContacts = [];
 let cachedContactsLoaded = false;
+let cachedRejections = [];
+let cachedRejectionsLoaded = false;
+let pendingRejectionId = null; // Set when user is picking replacement for a rejection
 
 // Records cache for the current session (fetched from Google Sheets)
 let cachedRecords = [];       // All records from Google Sheets
@@ -620,6 +665,16 @@ async function fetchAllContacts(force) {
 function getContactPhone(teacherName) {
   const c = cachedContacts.find(c => c.teacher_name === teacherName);
   return c ? c.phone : '';
+}
+
+async function fetchAllRejections(force) {
+  if (cachedRejectionsLoaded && !force) return cachedRejections;
+  try {
+    const data = await gsApi({ action: 'get_rejections' });
+    cachedRejections = data.rejections || [];
+    cachedRejectionsLoaded = true;
+  } catch (e) { console.warn('rejections failed', e); cachedRejections = []; }
+  return cachedRejections;
 }
 
 // Format phone for WhatsApp: strip non-digits, ensure country code
@@ -1781,6 +1836,16 @@ async function assignSubstitute(absentTeacherName, period, subTeacherName, class
       body.innerHTML = `<div class="alert alert-success m-3 mb-0"><i class="bi bi-check-circle"></i> 已安排 <strong>${subTeacherName}</strong> 代课</div>`;
     }
 
+    // If this is a replacement for a rejected record, update rejection's replaced_by
+    if (pendingRejectionId) {
+      try {
+        await gsApi({ action: 'update_rejection', id: pendingRejectionId, replaced_by: subTeacherName });
+        const rej = cachedRejections.find(r => r.id === pendingRejectionId);
+        if (rej) rej.replaced_by = subTeacherName;
+      } catch(e) { console.warn('Update rejection failed', e); }
+      pendingRejectionId = null;
+    }
+
     loadTodaySummary();
   } catch (e) {
     alert('保存失败: ' + e.message);
@@ -1818,12 +1883,15 @@ async function loadTodaySummary() {
     const waBtn = (phone && r.substitute_teacher !== '自习课')
       ? `<button class="btn btn-sm btn-outline-success me-1" onclick="sendWhatsApp('${esc(r.id)}')" title="发送 WhatsApp"><i class="bi bi-whatsapp"></i></button>`
       : '';
+    const rejectBtn = (r.substitute_teacher !== '自习课')
+      ? `<button class="btn btn-sm btn-outline-warning me-1" onclick="openRejectionModal('${esc(r.id)}')" title="退代课"><i class="bi bi-slash-circle"></i></button>`
+      : '';
     return `<tr>
       <td><span class="period-badge period-busy">${r.period}</span></td>
       <td>${r.original_class || ''} ${r.original_subject || ''}</td>
       <td>${r.absent_teacher}</td>
       <td><strong>${r.substitute_teacher}</strong></td>
-      <td class="no-print">${waBtn}<button class="btn btn-sm btn-outline-danger" onclick="deleteSub('${r.id}')"><i class="bi bi-x"></i></button></td>
+      <td class="no-print">${waBtn}${rejectBtn}<button class="btn btn-sm btn-outline-danger" onclick="deleteSub('${r.id}')" title="撤销"><i class="bi bi-x"></i></button></td>
     </tr>`;
   }).join('');
 }
@@ -1901,6 +1969,120 @@ async function deleteSub(id) {
     loadTodaySummary();
   } catch (e) {
     alert('删除失败: ' + e.message);
+  }
+}
+
+// ============================================================
+// REJECTION FLOW (老师退代课)
+// ============================================================
+let rejectionTargetRecord = null; // The record being rejected
+
+function openRejectionModal(recordId) {
+  const r = cachedRecords.find(rec => rec.id === recordId);
+  if (!r) { alert('找不到记录'); return; }
+  rejectionTargetRecord = r;
+
+  // Fill info
+  document.getElementById('rejectionInfo').innerHTML =
+    `<div><strong>日期：</strong>${r.date} ｜ <strong>节次：</strong>第${r.period}节</div>
+     <div><strong>缺席老师：</strong>${r.absent_teacher} ｜ <strong>班级：</strong>${r.original_class || ''} ${r.original_subject || ''}</div>
+     <div><strong>退代课老师：</strong><span class="text-warning fw-bold">${r.substitute_teacher}</span></div>`;
+
+  // Default time = now
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('rejectionTime').value = now.toISOString().slice(0, 16);
+  document.getElementById('rejectionReason').value = '';
+  document.getElementById('rejectionPickReplacement').checked = true;
+  document.getElementById('rejectionModal').style.display = 'flex';
+}
+
+function closeRejectionModal() {
+  document.getElementById('rejectionModal').style.display = 'none';
+  rejectionTargetRecord = null;
+}
+
+async function confirmRejection() {
+  if (!rejectionTargetRecord) return;
+  const r = rejectionTargetRecord;
+  const reason = document.getElementById('rejectionReason').value.trim();
+  const rejectedAt = document.getElementById('rejectionTime').value;
+  const pickReplacement = document.getElementById('rejectionPickReplacement').checked;
+
+  if (!reason) { alert('请填写退课原因'); return; }
+
+  try {
+    // 1. Log rejection
+    const rejResp = await gsApi({
+      action: 'add_rejection',
+      date: r.date,
+      period: r.period,
+      original_class: r.original_class || '',
+      original_subject: r.original_subject || '',
+      absent_teacher: r.absent_teacher,
+      rejected_teacher: r.substitute_teacher,
+      reason: reason,
+      rejected_at: rejectedAt ? new Date(rejectedAt).toISOString() : new Date().toISOString()
+    });
+    if (rejResp.error) throw new Error(rejResp.error);
+
+    // Add to local cache
+    cachedRejections.push({
+      id: rejResp.id,
+      date: r.date,
+      period: String(r.period),
+      original_class: r.original_class || '',
+      original_subject: r.original_subject || '',
+      absent_teacher: r.absent_teacher,
+      rejected_teacher: r.substitute_teacher,
+      reason: reason,
+      replaced_by: '',
+      rejected_at: rejectedAt ? new Date(rejectedAt).toISOString() : new Date().toISOString()
+    });
+
+    // 2. Delete the substitution record
+    await gsApi({ action: 'delete_record', id: r.id });
+    cachedRecords = cachedRecords.filter(rec => rec.id !== r.id);
+
+    // 3. Track pending rejection for updating replaced_by later
+    pendingRejectionId = rejResp.id;
+
+    closeRejectionModal();
+    loadTodaySummary();
+
+    // 4. Open recommendation panel if user wants to pick replacement
+    if (pickReplacement) {
+      // Find the absent teacher in the list, or create a temporary context
+      const absent = absentList.find(a => a.full_code === r.absent_teacher);
+      const teacherId = absent ? absent.id : 0;
+      const cardId = `reject_${teacherId}_${r.period}_${Date.now()}`;
+
+      // Show recommendation panel
+      document.getElementById('placeholder').classList.add('d-none');
+      document.getElementById('recommendSection').classList.remove('d-none');
+      const panel = document.getElementById('recommendPanels');
+      panel.innerHTML = `
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>${r.rejected_teacher || r.substitute_teacher}</strong> 已退课，请为第${r.period}节选择新代课老师
+        </div>
+        <div class="card" id="${cardId}">
+          <div class="card-header">
+            <i class="bi bi-clock"></i> 第${r.period}节 — <span class="text-danger">${r.absent_teacher}</span> — ${r.original_class || ''} / ${r.original_subject || ''}
+            <span class="badge bg-warning float-end">重新选择</span>
+          </div>
+          <div class="card-body p-0"></div>
+        </div>
+      `;
+      const dow = getDayOfWeek(r.date);
+      const { regular, interns } = recommendAll(r.date, dow, parseInt(r.period), r.absent_teacher, r.original_class);
+      const body = document.querySelector(`#${cardId} .card-body`);
+      body.innerHTML = buildCandidateTable(regular, r.absent_teacher, parseInt(r.period), r.original_class || '', r.original_subject || '', interns);
+    } else {
+      alert('已记录退代课，请稍后手动安排新代课老师');
+    }
+  } catch (e) {
+    alert('操作失败: ' + e.message);
   }
 }
 
@@ -2070,6 +2252,9 @@ async function loadStats() {
       return `<tr><td>${l.teacher_name}</td><td>${l.long_term_sub || '-'}</td><td>${l.start_date}</td><td>${l.end_date}</td><td>${l.reason || '-'}</td><td><span class="badge bg-primary">${subCount}次</span></td></tr>`;
     }).join('');
   }
+
+  // Rejections list
+  renderRejectionsList();
 }
 
 function exportStats() {
@@ -2098,6 +2283,35 @@ function exportStats() {
   XLSX.utils.book_append_sheet(wb, ws, '代课统计');
   const filename = `代课统计${year ? '_' + year : ''}${month ? '_' + month + '月' : ''}.xlsx`;
   XLSX.writeFile(wb, filename);
+}
+
+async function refreshRejectionsList() {
+  await fetchAllRejections(true);
+  renderRejectionsList();
+}
+
+function renderRejectionsList() {
+  const tbody = document.getElementById('rejectionsBody');
+  const noEl = document.getElementById('noRejections');
+  if (!tbody) return;
+  if (cachedRejections.length === 0) {
+    tbody.innerHTML = '';
+    if (noEl) noEl.classList.remove('d-none');
+    return;
+  }
+  if (noEl) noEl.classList.add('d-none');
+  const sorted = cachedRejections.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  tbody.innerHTML = sorted.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td>第${r.period}节</td>
+      <td>${r.original_class || ''} ${r.original_subject || ''}</td>
+      <td>${r.absent_teacher}</td>
+      <td class="text-warning"><strong>${r.rejected_teacher}</strong></td>
+      <td><small>${r.reason || ''}</small></td>
+      <td>${r.replaced_by ? `<span class="text-success">${r.replaced_by}</span>` : '<span class="text-muted">未安排</span>'}</td>
+    </tr>
+  `).join('');
 }
 
 function exportLongTermReport() {
@@ -3109,6 +3323,7 @@ async function init() {
     await fetchAllBlackouts(true);
     await fetchAllDuties(true);
     await fetchAllContacts(true);
+    await fetchAllRejections(true);
     loadBuildingsFromLocal();
   } catch(e) {
     console.warn('Failed to fetch records', e);
