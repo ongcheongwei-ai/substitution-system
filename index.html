@@ -228,6 +228,21 @@ body { background: #f5f6fa; font-size: 14px; }
       </table>
     </div>
   </div>
+  <div class="card mt-4 border-primary">
+    <div class="card-header bg-primary text-white">
+      <i class="bi bi-file-earmark-spreadsheet-fill"></i> 月结算报表 (人力资源处)
+      <button class="btn btn-sm btn-light float-end" onclick="exportMonthlyHRReport()"><i class="bi bi-download"></i> 生成月度报表</button>
+    </div>
+    <div class="card-body">
+      <small class="text-muted">
+        根据上方选择的<strong>年份</strong>和<strong>月份</strong>生成三个 sheet 的 Excel 报表：
+        <br>• <strong>请假</strong> — 按老师+请假类型分组，各日期高中/初中节数
+        <br>• <strong>代课</strong> — 按代课老师分组，各日期高中/初中节数
+        <br>• <strong>老师卡号</strong> — 参考表（需自行粘贴数据以便 VLOOKUP 自动填入编号和卡号）
+      </small>
+    </div>
+  </div>
+
   <div class="card mt-4">
     <div class="card-header">
       <i class="bi bi-file-earmark-text"></i> 长期代课报表 (HR)
@@ -2096,6 +2111,164 @@ function exportLongTermReport() {
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   XLSX.utils.book_append_sheet(wb, ws, '长期代课报表');
   XLSX.writeFile(wb, '长期代课报表.xlsx');
+}
+
+// ============================================================
+// MONTHLY HR REPORT — 教师请假代课记录
+// Generates 3-sheet Excel: 请假, 代课, 老师卡号
+// ============================================================
+function exportMonthlyHRReport() {
+  const year = document.getElementById('statYear').value;
+  const month = document.getElementById('statMonth').value;
+  if (!year || !month) { alert('请先在统计页选择年份和月份'); return; }
+
+  const mm = String(month).padStart(2, '0');
+  const yyyymm = year + '-' + mm;
+  const monthStart = yyyymm + '-01';
+  const monthEnd = yyyymm + '-31';
+
+  // Filter this month's records
+  const monthRecords = cachedRecords.filter(r => r.date && r.date.startsWith(yyyymm));
+  const monthLeaves = cachedLeaves.filter(l =>
+    l.status === 'active' && !(l.end_date < monthStart || l.start_date > monthEnd)
+  );
+
+  if (monthRecords.length === 0) {
+    if (!confirm(`${year}年${month}月暂无代课记录，仍要生成空报表吗？`)) return;
+  }
+
+  // Leave reason → short code
+  const getLeaveCode = (reason) => {
+    const r = String(reason || '');
+    if (r.indexOf('病') >= 0) return '病';
+    if (r.indexOf('公') >= 0) return '公';
+    if (r.indexOf('事') >= 0) return '事';
+    if (r.indexOf('婚') >= 0) return '婚';
+    if (r.indexOf('产') >= 0) return '产';
+    if (r.indexOf('丧') >= 0) return '丧';
+    return r ? r.charAt(0) : '事';
+  };
+
+  const findLeaveFor = (teacherName, date) => {
+    return monthLeaves.find(l => l.teacher_name === teacherName && date >= l.start_date && date <= l.end_date);
+  };
+
+  const isSenior = (classInfo) => /^S/i.test(String(classInfo || '').trim());
+
+  // Format date: "2026-03-04" → "04/03"
+  const fmtDate = (d) => {
+    const parts = d.split('-');
+    return parts[2] + '/' + parts[1];
+  };
+
+  // --- Aggregate 请假 ---
+  // key = teacher|code
+  const leaveGroups = {};
+  monthRecords.forEach(r => {
+    const leave = findLeaveFor(r.absent_teacher, r.date);
+    const code = leave ? getLeaveCode(leave.reason || leave.leave_type) : '事';
+    const key = r.absent_teacher + '|' + code;
+    if (!leaveGroups[key]) leaveGroups[key] = { teacher: r.absent_teacher, type: code, dates: {} };
+    const dateKey = fmtDate(r.date);
+    if (!leaveGroups[key].dates[dateKey]) leaveGroups[key].dates[dateKey] = { senior: 0, junior: 0 };
+    if (isSenior(r.original_class)) leaveGroups[key].dates[dateKey].senior++;
+    else leaveGroups[key].dates[dateKey].junior++;
+  });
+
+  // --- Aggregate 代课 ---
+  const subGroups = {};
+  monthRecords.forEach(r => {
+    if (!r.substitute_teacher || r.substitute_teacher === '自习课') return;
+    const key = r.substitute_teacher;
+    if (!subGroups[key]) subGroups[key] = { teacher: r.substitute_teacher, dates: {} };
+    const dateKey = fmtDate(r.date);
+    if (!subGroups[key].dates[dateKey]) subGroups[key].dates[dateKey] = { senior: 0, junior: 0 };
+    if (isSenior(r.original_class)) subGroups[key].dates[dateKey].senior++;
+    else subGroups[key].dates[dateKey].junior++;
+  });
+
+  const colHeaders = ['编号', '卡号', '姓名', '事项', '高中', '初中', '节数', '本月天数', '付代课金', '日期/备注'];
+  const MAX_DATE_COLS = 10;
+
+  // Build 请假 sheet rows
+  // Row 1: blank; Row 2: title; Row 3: column headers; Row 4+: data
+  const leaveRows = [
+    [],
+    [`${year}年${month}月份教师请假记录`],
+    colHeaders
+  ];
+  const leaveGroupList = Object.values(leaveGroups).sort((a, b) => a.teacher.localeCompare(b.teacher));
+  leaveGroupList.forEach((g, idx) => {
+    const dateEntries = Object.entries(g.dates).sort();
+    let seniorSum = 0, juniorSum = 0;
+    dateEntries.forEach(([, v]) => { seniorSum += v.senior; juniorSum += v.junior; });
+    const dateCells = dateEntries.slice(0, MAX_DATE_COLS).map(([d, v]) => `${d} (${v.senior}) (${v.junior})`);
+    while (dateCells.length < MAX_DATE_COLS) dateCells.push('');
+    // First row with totals
+    const rowNum = 4 + idx; // 1-indexed spreadsheet row
+    leaveRows.push([
+      { f: `IFERROR(VLOOKUP(C${rowNum},'老师卡号'!A:D,2,FALSE),"")` },
+      { f: `IFERROR(VLOOKUP(C${rowNum},'老师卡号'!A:D,3,FALSE),"")` },
+      g.teacher,
+      g.type,
+      seniorSum,
+      juniorSum,
+      seniorSum + juniorSum,
+      dateEntries.length,
+      '',
+      ...dateCells
+    ]);
+  });
+
+  // Build 代课 sheet rows
+  const subRows = [
+    [],
+    [`${year}年${month}月份教师代课记录`],
+    colHeaders
+  ];
+  const subGroupList = Object.values(subGroups).sort((a, b) => a.teacher.localeCompare(b.teacher));
+  subGroupList.forEach((g, idx) => {
+    const dateEntries = Object.entries(g.dates).sort();
+    let seniorSum = 0, juniorSum = 0;
+    dateEntries.forEach(([, v]) => { seniorSum += v.senior; juniorSum += v.junior; });
+    const dateCells = dateEntries.slice(0, MAX_DATE_COLS).map(([d, v]) => `${d} (${v.senior}) (${v.junior})`);
+    while (dateCells.length < MAX_DATE_COLS) dateCells.push('');
+    const rowNum = 4 + idx;
+    subRows.push([
+      { f: `IFERROR(VLOOKUP(C${rowNum},'老师卡号'!A:D,2,FALSE),"")` },
+      { f: `IFERROR(VLOOKUP(C${rowNum},'老师卡号'!A:D,3,FALSE),"")` },
+      g.teacher,
+      '代课',
+      seniorSum,
+      juniorSum,
+      seniorSum + juniorSum,
+      dateEntries.length,
+      '',
+      ...dateCells
+    ]);
+  });
+
+  // Build 老师卡号 sheet — headers only (user pastes their data)
+  const cardRows = [['姓名', '编号', 'T_No', '姓名']];
+
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.aoa_to_sheet(leaveRows);
+  const ws2 = XLSX.utils.aoa_to_sheet(subRows);
+  const ws3 = XLSX.utils.aoa_to_sheet(cardRows);
+
+  // Set column widths
+  const colWidths = [{wch:8},{wch:8},{wch:14},{wch:6},{wch:6},{wch:6},{wch:6},{wch:9},{wch:9}];
+  for (let i = 0; i < MAX_DATE_COLS; i++) colWidths.push({wch:14});
+  ws1['!cols'] = colWidths;
+  ws2['!cols'] = colWidths;
+  ws3['!cols'] = [{wch:14},{wch:8},{wch:10},{wch:12}];
+
+  XLSX.utils.book_append_sheet(wb, ws1, '请假');
+  XLSX.utils.book_append_sheet(wb, ws2, '代课');
+  XLSX.utils.book_append_sheet(wb, ws3, '老师卡号');
+
+  XLSX.writeFile(wb, `${year}年${month}月教师请假代课记录.xlsx`);
 }
 
 // ============================================================
